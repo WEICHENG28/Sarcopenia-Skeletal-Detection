@@ -1,0 +1,60 @@
+Phase 1~4 Development Summary (Reviewer Draft Source for PROMPT.md)
+
+Overview
+- This project progressed through a practical ML pipeline lifecycle: data readiness, feature engineering, model training, and inference with explainability.
+- The implemented flow is consistent with the intended sequence: data -> features -> training -> inference.
+
+Phase 1: Baseline and governance-aligned scaffolding
+- Established project structure for source code, data, models, and test scripts.
+- Defined a stable baseline for iterative delivery so later phases could reuse the same folder and artifact conventions.
+- Created architecture/governance documentation set (non-functional, API, security/observability, RACI/SLA references) as review anchors for implementation checks.
+
+Phase 2: Data readiness and feature contract preparation
+- Standardized tabular training source at data/database.csv with explicit control columns (Label, action labels) and candidate numeric feature columns.
+- Added mock motion files in data/raw for deterministic local tests.
+- Built and validated feature assumptions used downstream by training/inference (e.g., age/height/weight/bmi and motion-derived signals).
+
+Phase 3: Model training pipeline implementation
+- Implemented src/train.py with the following behavior:
+  1) Load CSV via built-in csv reader (dependency-light approach, no pandas requirement).
+  2) Filter to Label in {0,1} and ignore invalid/empty labels.
+  3) Build numeric feature matrix while excluding control/non-feature fields.
+  4) Train three independent RandomForest classifiers for Sit/Walk/Squat.
+  5) Evaluate with Recall, F1, ROC-AUC (with safe fallback when ROC-AUC is not computable).
+  6) Persist scaler + models to models/*.pkl.
+- This phase provided stable model artifacts and an executable core path for later inference integration.
+
+Phase 4: Inference and explainability
+- Implemented src/inference.py to:
+  - Parse frontend-like payloads with per-action records.
+  - Extract per-action features by combining profile + MOT + optional TRC.
+  - Apply late fusion over available actions using dynamic denominator (sum of used action weights).
+  - Generate Top-3 explanations using SHAP when available; fallback to model feature importances when SHAP fails.
+- Added test_inference.py as end-to-end smoke validation of payload -> per-action inference -> fused risk -> explanation output.
+
+Key technical difficulties and autonomous troubleshooting
+1) SHAP and dependency sensitivity
+- Challenge: SHAP behavior differs across versions/model wrappers (list vs ndarray output, class axis layout).
+- Resolution: implemented robust shape handling in SHAP parsing and a deterministic fallback explanation mode using feature_importances_.
+
+2) Environment and binary package compatibility (scikit-learn/scipy)
+- Challenge: runtime import error can occur in global Python environment when loading joblib artifacts due to scipy binary mismatch.
+- Resolution: executed inference/training verification using project virtual environment (.venv_phase3) where dependencies are consistent with model artifacts.
+
+3) Training-inference feature schema drift risk
+- Challenge: if inference infers feature columns only from CSV header, non-numeric columns could accidentally enter schema and diverge from training-time numeric-only logic.
+- Resolution (Phase 5 reviewer refactor): inference feature column discovery now mirrors training logic by filtering rows/labels and validating numeric convertibility per candidate column.
+
+Role and value of orchestration mode in this workflow
+- Orchestration contributed by decomposing work into explicit, low-risk checkpoints:
+  1) contract and data assumptions;
+  2) feature extraction stability;
+  3) train artifact production;
+  4) inference integration and explainability;
+  5) QA review and targeted refactor.
+- This staged control reduced regression risk, improved traceability of failures to phase boundaries, and enabled focused rollback/retest when environment or dependency issues appeared.
+- In practice, orchestration improved delivery predictability and maintainability by enforcing module-level responsibility and test-first validation gates.
+
+Phase 5 reviewer note
+- Final QA review confirmed the end-to-end flow remains executable after targeted refactor.
+- Refactor scope was intentionally minimal and localized to inference schema consistency to preserve runtime behavior and artifact compatibility.
