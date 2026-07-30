@@ -1,0 +1,3 @@
+.venv_phase3/
+__pycache__/
+*.pyc

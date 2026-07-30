@@ -1,0 +1,80 @@
+{
+  "model_family": "phase4_shiftgcn",
+  "actions": [
+    "Sit",
+    "Walk",
+    "Squat"
+  ],
+  "T": 96,
+  "V": 33,
+  "C": 3,
+  "static_cols": [
+    "static_age",
+    "static_bmi",
+    "static_height_cm",
+    "static_weight_kg"
+  ],
+  "static_scalers": {
+    "Sit": {
+      "static_cols": [
+        "static_age",
+        "static_bmi",
+        "static_height_cm",
+        "static_weight_kg"
+      ],
+      "mean_": [
+        30.0,
+        22.491350173950195,
+        170.0,
+        65.0
+      ],
+      "scale_": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "Walk": {
+      "static_cols": [
+        "static_age",
+        "static_bmi",
+        "static_height_cm",
+        "static_weight_kg"
+      ],
+      "mean_": [
+        32.5,
+        23.0,
+        169.0,
+        67.5
+      ],
+      "scale_": [
+        2.5,
+        1.0,
+        1.0,
+        2.5
+      ]
+    },
+    "Squat": {
+      "static_cols": [
+        "static_age",
+        "static_bmi",
+        "static_height_cm",
+        "static_weight_kg"
+      ],
+      "mean_": [
+        32.5,
+        23.0,
+        169.0,
+        67.5
+      ],
+      "scale_": [
+        2.5,
+        1.0,
+        1.0,
+        2.5
+      ]
+    }
+  },
+  "generated_at_utc": "2026-04-11T15:26:24.882162+00:00"
+}

@@ -1,0 +1,19 @@
+{
+  "model_family": "phase4_cnn",
+  "actions": [
+    "Sit",
+    "Walk",
+    "Squat"
+  ],
+  "T": 64,
+  "C": 106,
+  "static_cols": [
+    "static_age",
+    "static_bmi",
+    "static_gender",
+    "static_height_cm",
+    "static_weight_kg"
+  ],
+  "seq_col_count": 6784,
+  "generated_at_utc": "2026-03-20T15:43:55.394558+00:00"
+}

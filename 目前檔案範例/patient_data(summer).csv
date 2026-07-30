@@ -1,0 +1,130 @@
+﻿user_id,age,height_cm,weight_kg,gender,action,video_path,json_path,therapist_label,labeled_at
+P000,67,156,56,male,Sit,data\videos\P000_Sit.mp4,data\raw\P000_Sit.json,,
+P000,67,156,56,male,Walk,data\videos\P000_Walk.mp4,data\raw\P000_Walk.json,,
+P000,67,156,56,male,Squat,data\videos\P000_Squat.mp4,data\raw\P000_Squat.json,,
+P001,67,175,66,male,Sit,data\videos\P001_Sit.mp4,data\raw\P001_Sit.json,1,2026/4/20 16:27
+P001,67,175,66,male,Walk,data\videos\P001_Walk.mp4,data\raw\P001_Walk.json,1,2026/4/20 16:27
+P001,67,175,66,male,Sit,data\videos\P001_Sit.mp4,data\raw\P001_Sit.json,1,2026/4/20 16:27
+P001,67,175,66,male,Walk,data\videos\P001_Walk.mp4,data\raw\P001_Walk.json,1,2026/4/20 16:27
+P001,67,175,66,male,Sit,data\videos\P001_Sit.mp4,data\raw\P001_Sit.json,1,2026/4/20 16:27
+P001,67,175,66,male,Walk,data\videos\P001_Walk.mp4,data\raw\P001_Walk.json,1,2026/4/20 16:27
+P002,68,178,66,female,Sit,data\videos\P002_Sit.mp4,data\raw\P002_Sit.json,,
+P002,68,178,66,female,Walk,data\videos\P002_Walk.mp4,data\raw\P002_Walk.json,,
+P002,68,178,66,female,Squat,data\videos\P002_Squat.mp4,data\raw\P002_Squat.json,,
+P003,19,180,67,male,Sit,data\videos\P003_Sit.mp4,data\raw\P003_Sit.json,,
+P003,19,180,67,male,Walk,data\videos\P003_Walk.mp4,data\raw\P003_Walk.json,,
+P003,19,180,67,male,Squat,data\videos\P003_Squat.mp4,data\raw\P003_Squat.json,,
+P004,56,167,78,female,Sit,data\videos\P004_Sit.mp4,data\raw\P004_Sit.json,1,2026/4/20 16:27
+P004,56,167,78,female,Walk,data\videos\P004_Walk.mp4,data\raw\P004_Walk.json,1,2026/4/20 16:27
+P004,56,167,78,female,Squat,data\videos\P004_Squat.mp4,data\raw\P004_Squat.json,1,2026/4/20 16:27
+P005,67,176,67,male,Sit,data\videos\P005_Sit.mp4,data\raw\P005_Sit.json,1,2026/4/20 17:14
+P005,67,176,67,male,Walk,data\videos\P005_Walk.mp4,data\raw\P005_Walk.json,1,2026/4/20 17:14
+P005,67,176,67,male,Squat,data\videos\P005_Squat.mp4,data\raw\P005_Squat.json,1,2026/4/20 17:14
+P006,89,176,66,male,Sit,data\videos\P006_Sit.mp4,data\raw\P006_Sit.json,0,2026/4/24 09:38
+P006,89,176,66,male,Walk,data\videos\P006_Walk.mp4,data\raw\P006_Walk.json,0,2026/4/24 09:38
+P006,89,176,66,male,Squat,data\videos\P006_Squat.mp4,data\raw\P006_Squat.json,0,2026/4/24 09:38
+P006,56,164,66,male,Sit,data\videos\P006_Sit.mp4,data\raw\P006_Sit.json,0,2026/4/24 09:38
+P006,56,164,66,male,Walk,data\videos\P006_Walk.mp4,data\raw\P006_Walk.json,0,2026/4/24 09:38
+P006,56,164,66,male,Squat,data\videos\P006_Squat.mp4,data\raw\P006_Squat.json,0,2026/4/24 09:38
+A001,75,156,66.8,male,Sit,data\videos\A001_Sit.mp4,data\raw\A001_Sit.json,1,2026/4/24 09:59
+A001,75,156,66.8,male,Walk,data\videos\A001_Walk.mp4,data\raw\A001_Walk.json,1,2026/4/24 09:59
+A001,75,156,66.8,male,Squat,data\videos\A001_Squat.mp4,data\raw\A001_Squat.json,1,2026/4/24 09:59
+A002,75,158,56.8,female,Sit,data\videos\A002_Sit.mp4,data\raw\A002_Sit.json,1,2026/4/24 10:07
+A002,75,158,56.8,female,Walk,data\videos\A002_Walk.mp4,data\raw\A002_Walk.json,1,2026/4/24 10:07
+A002,75,158,56.8,female,Squat,data\videos\A002_Squat.mp4,data\raw\A002_Squat.json,1,2026/4/24 10:07
+P0007,68,165,57,male,Sit,data\videos\P0007_Sit.mp4,data\raw\P0007_Sit.json,,
+P0007,68,165,57,male,Walk,data\videos\P0007_Walk.mp4,data\raw\P0007_Walk.json,,
+P0007,68,165,57,male,Squat,data\videos\P0007_Squat.mp4,data\raw\P0007_Squat.json,,
+A005,71,152,61,female,Sit,data\videos\A005_Sit.mp4,data\raw\A005_Sit.json,0,2026/7/16 14:27
+A005,71,152,61,female,Walk,data\videos\A005_Walk.mp4,data\raw\A005_Walk.json,0,2026/7/16 14:27
+A005,71,152,61,female,Squat,data\videos\A005_Squat.mp4,data\raw\A005_Squat.json,0,2026/7/16 14:27
+A007,77,152,51,male,Sit,data\videos\A007_Sit.mp4,data\raw\A007_Sit.json,0,2026/7/16 14:46
+A007,77,152,51,male,Walk,data\videos\A007_Walk.mp4,data\raw\A007_Walk.json,0,2026/7/16 14:46
+A007,77,152,51,male,Squat,data\videos\A007_Squat.mp4,data\raw\A007_Squat.json,0,2026/7/16 14:46
+A006,81,166,72,male,Sit,data\videos\A006_Sit.mp4,data\raw\A006_Sit.json,0,2026/7/16 14:51
+A006,81,166,72,male,Walk,data\videos\A006_Walk.mp4,data\raw\A006_Walk.json,0,2026/7/16 14:51
+A006,81,166,72,male,Squat,data\videos\A006_Squat.mp4,data\raw\A006_Squat.json,0,2026/7/16 14:51
+A008,80,145,45.6,female,Sit,data\videos\A008_Sit.mp4,data\raw\A008_Sit.json,1,2026/7/16 14:57
+A008,80,145,45.6,female,Walk,data\videos\A008_Walk.mp4,data\raw\A008_Walk.json,1,2026/7/16 14:57
+A008,80,145,45.6,female,Squat,data\videos\A008_Squat.mp4,data\raw\A008_Squat.json,1,2026/7/16 14:57
+A009,83,146,52.5,male,Sit,data\videos\A009_Sit.mp4,data\raw\A009_Sit.json,1,2026/7/16 15:06
+A009,83,146,52.5,male,Walk,data\videos\A009_Walk.mp4,data\raw\A009_Walk.json,1,2026/7/16 15:06
+A009,83,146,52.5,male,Squat,data\videos\A009_Squat.mp4,data\raw\A009_Squat.json,1,2026/7/16 15:06
+A010,85,145,40,female,Sit,data\videos\A010_Sit.mp4,data\raw\A010_Sit.json,1,2026/7/16 15:14
+A010,85,145,40,female,Walk,data\videos\A010_Walk.mp4,data\raw\A010_Walk.json,1,2026/7/16 15:14
+A010,85,145,40,female,Squat,data\videos\A010_Squat.mp4,data\raw\A010_Squat.json,1,2026/7/16 15:14
+A011,69,158,60,female,Sit,data\videos\A011_Sit.mp4,data\raw\A011_Sit.json,0,2026/7/16 15:16
+A011,69,158,60,female,Walk,data\videos\A011_Walk.mp4,data\raw\A011_Walk.json,0,2026/7/16 15:16
+A011,69,158,60,female,Squat,data\videos\A011_Squat.mp4,data\raw\A011_Squat.json,0,2026/7/16 15:16
+A012,71,153,57,female,Sit,data\videos\A012_Sit.mp4,data\raw\A012_Sit.json,0,2026/7/16 15:25
+A012,71,153,57,female,Walk,data\videos\A012_Walk.mp4,data\raw\A012_Walk.json,0,2026/7/16 15:25
+A012,71,153,57,female,Squat,data\videos\A012_Squat.mp4,data\raw\A012_Squat.json,0,2026/7/16 15:25
+A013,79,156,57,female,Sit,data\videos\A013_Sit.mp4,data\raw\A013_Sit.json,0,2026/7/16 15:33
+A013,79,156,57,female,Walk,data\videos\A013_Walk.mp4,data\raw\A013_Walk.json,0,2026/7/16 15:33
+A013,79,156,57,female,Squat,data\videos\A013_Squat.mp4,data\raw\A013_Squat.json,0,2026/7/16 15:33
+A014,77,145,50,female,Sit,data\videos\A014_Sit.mp4,data\raw\A014_Sit.json,1,2026/7/16 15:40
+A014,77,145,50,female,Walk,data\videos\A014_Walk.mp4,data\raw\A014_Walk.json,1,2026/7/16 15:40
+A014,77,145,50,female,Squat,data\videos\A014_Squat.mp4,data\raw\A014_Squat.json,1,2026/7/16 15:40
+A015,85,158,67,female,Sit,data\videos\A015_Sit.mp4,data\raw\A015_Sit.json,1,2026/7/16 15:46
+A015,85,158,67,female,Walk,data\videos\A015_Walk.mp4,data\raw\A015_Walk.json,1,2026/7/16 15:46
+A015,85,158,67,female,Squat,data\videos\A015_Squat.mp4,data\raw\A015_Squat.json,1,2026/7/16 15:46
+A016,88,165,85,male,Sit,data\videos\A016_Sit.mp4,data\raw\A016_Sit.json,1,2026/7/16 15:52
+A016,88,165,85,male,Walk,data\videos\A016_Walk.mp4,data\raw\A016_Walk.json,1,2026/7/16 15:52
+A016,88,165,85,male,Squat,data\videos\A016_Squat.mp4,data\raw\A016_Squat.json,1,2026/7/16 15:52
+A017,74,163,67,female,Sit,data\videos\A017_Sit.mp4,data\raw\A017_Sit.json,0,2026/7/16 15:59
+A017,74,163,67,female,Walk,data\videos\A017_Walk.mp4,data\raw\A017_Walk.json,0,2026/7/16 15:59
+A017,74,163,67,female,Squat,data\videos\A017_Squat.mp4,data\raw\A017_Squat.json,0,2026/7/16 15:59
+A018,74,164,80,male,Sit,data\videos\A018_Sit.mp4,data\raw\A018_Sit.json,0,2026/7/16 16:04
+A018,74,164,80,male,Walk,data\videos\A018_Walk.mp4,data\raw\A018_Walk.json,0,2026/7/16 16:04
+A018,74,164,80,male,Squat,data\videos\A018_Squat.mp4,data\raw\A018_Squat.json,0,2026/7/16 16:04
+A019,76,140,52,female,Sit,data\videos\A019_Sit.mp4,data\raw\A019_Sit.json,0,2026/7/16 16:10
+A019,76,140,52,female,Walk,data\videos\A019_Walk.mp4,data\raw\A019_Walk.json,0,2026/7/16 16:10
+A019,76,140,52,female,Squat,data\videos\A019_Squat.mp4,data\raw\A019_Squat.json,0,2026/7/16 16:10
+A020,75,167,75,male,Sit,data\videos\A020_Sit.mp4,data\raw\A020_Sit.json,0,2026/7/16 16:13
+A020,75,167,75,male,Walk,data\videos\A020_Walk.mp4,data\raw\A020_Walk.json,0,2026/7/16 16:13
+A020,75,167,75,male,Squat,data\videos\A020_Squat.mp4,data\raw\A020_Squat.json,0,2026/7/16 16:13
+A025,85,152,58.5,female,Sit,data\videos\A025_Sit.mp4,data\raw\A025_Sit.json,1,2026/7/30 10:41
+A025,85,152,58.5,female,Walk,data\videos\A025_Walk.mp4,data\raw\A025_Walk.json,1,2026/7/30 10:41
+A025,85,152,58.5,female,Squat,data\videos\A025_Squat.mp4,data\raw\A025_Squat.json,1,2026/7/30 10:41
+A021,70,155,62.5,female,Sit,data\videos\A021_Sit.mp4,data\raw\A021_Sit.json,0,2026/7/30 10:44
+A021,70,155,62.5,female,Walk,data\videos\A021_Walk.mp4,data\raw\A021_Walk.json,0,2026/7/30 10:44
+A021,70,155,62.5,female,Squat,data\videos\A021_Squat.mp4,data\raw\A021_Squat.json,0,2026/7/30 10:44
+A022,76,155,50,female,Sit,data\videos\A022_Sit.mp4,data\raw\A022_Sit.json,1,2026/7/30 10:47
+A022,76,155,50,female,Walk,data\videos\A022_Walk.mp4,data\raw\A022_Walk.json,1,2026/7/30 10:47
+A022,76,155,50,female,Squat,data\videos\A022_Squat.mp4,data\raw\A022_Squat.json,1,2026/7/30 10:47
+A023,77,156,63,male,Sit,data\videos\A023_Sit.mp4,data\raw\A023_Sit.json,0,2026/7/30 10:49
+A023,77,156,63,male,Walk,data\videos\A023_Walk.mp4,data\raw\A023_Walk.json,0,2026/7/30 10:49
+A023,77,156,63,male,Squat,data\videos\A023_Squat.mp4,data\raw\A023_Squat.json,0,2026/7/30 10:49
+a024,72,153,62,female,Sit,data\videos\a024_Sit.mp4,data\raw\a024_Sit.json,0,2026/7/30 10:52
+a024,72,153,62,female,Walk,data\videos\a024_Walk.mp4,data\raw\a024_Walk.json,0,2026/7/30 10:52
+a024,72,153,62,female,Squat,data\videos\a024_Squat.mp4,data\raw\a024_Squat.json,0,2026/7/30 10:52
+A026,69,153,51,female,Sit,data\videos\A026_Sit.mp4,data\raw\A026_Sit.json,0,2026/7/30 10:55
+A026,69,153,51,female,Walk,data\videos\A026_Walk.mp4,data\raw\A026_Walk.json,0,2026/7/30 10:55
+A026,69,153,51,female,Squat,data\videos\A026_Squat.mp4,data\raw\A026_Squat.json,0,2026/7/30 10:55
+A027,78,151,70,female,Sit,data\videos\A027_Sit.mp4,data\raw\A027_Sit.json,0,2026/7/30 10:59
+A027,78,151,70,female,Walk,data\videos\A027_Walk.mp4,data\raw\A027_Walk.json,0,2026/7/30 10:59
+A027,78,151,70,female,Squat,data\videos\A027_Squat.mp4,data\raw\A027_Squat.json,0,2026/7/30 10:59
+A028,75,158,54,female,Sit,data\videos\A028_Sit.mp4,data\raw\A028_Sit.json,0,2026/7/30 11:02
+A028,75,158,54,female,Walk,data\videos\A028_Walk.mp4,data\raw\A028_Walk.json,0,2026/7/30 11:02
+A028,75,158,54,female,Squat,data\videos\A028_Squat.mp4,data\raw\A028_Squat.json,0,2026/7/30 11:02
+A029,74,142,54,female,Sit,data\videos\A029_Sit.mp4,data\raw\A029_Sit.json,1,2026/7/30 11:05
+A029,74,142,54,female,Walk,data\videos\A029_Walk.mp4,data\raw\A029_Walk.json,1,2026/7/30 11:05
+A029,74,142,54,female,Squat,data\videos\A029_Squat.mp4,data\raw\A029_Squat.json,1,2026/7/30 11:05
+A030,73,150,57,female,Sit,data\videos\A030_Sit.mp4,data\raw\A030_Sit.json,1,2026/7/30 11:09
+A030,73,150,57,female,Walk,data\videos\A030_Walk.mp4,data\raw\A030_Walk.json,1,2026/7/30 11:09
+A030,73,150,57,female,Squat,data\videos\A030_Squat.mp4,data\raw\A030_Squat.json,1,2026/7/30 11:09
+A031,76,165,64.5,male,Sit,data\videos\A031_Sit.mp4,data\raw\A031_Sit.json,0,2026/7/30 11:13
+A031,76,165,64.5,male,Walk,data\videos\A031_Walk.mp4,data\raw\A031_Walk.json,0,2026/7/30 11:13
+A031,76,165,64.5,male,Squat,data\videos\A031_Squat.mp4,data\raw\A031_Squat.json,0,2026/7/30 11:13
+A032,74,163,63,male,Sit,data\videos\A032_Sit.mp4,data\raw\A032_Sit.json,0,2026/7/30 11:16
+A032,74,163,63,male,Walk,data\videos\A032_Walk.mp4,data\raw\A032_Walk.json,0,2026/7/30 11:16
+A032,74,163,63,male,Squat,data\videos\A032_Squat.mp4,data\raw\A032_Squat.json,0,2026/7/30 11:16
+A033,70,153,50,female,Sit,data\videos\A033_Sit.mp4,data\raw\A033_Sit.json,0,2026/7/30 11:19
+A033,70,153,50,female,Walk,data\videos\A033_Walk.mp4,data\raw\A033_Walk.json,0,2026/7/30 11:19
+A033,70,153,50,female,Squat,data\videos\A033_Squat.mp4,data\raw\A033_Squat.json,0,2026/7/30 11:19
+A003,82,148,63.5,female,Sit,data\videos\A003_Sit.mp4,data\raw\A003_Sit.json,1,2026/5/13 14:42
+A003,82,148,63.5,female,Walk,data\videos\A003_Walk.mp4,data\raw\A003_Walk.json,1,2026/5/13 14:42
+A003,82,148,63.5,female,Squat,data\videos\A003_Squat.mp4,data\raw\A003_Squat.json,1,2026/5/13 14:42
+A004,72,162,57,male,Sit,data\videos\A004_Sit.mp4,data\raw\A004_Sit.json,1,2026/5/20 15:56
+A004,72,162,57,male,Walk,data\videos\A004_Walk.mp4,data\raw\A004_Walk.json,1,2026/5/20 15:56
+A004,72,162,57,male,Squat,data\videos\A004_Squat.mp4,data\raw\A004_Squat.json,1,2026/5/20 15:56
