@@ -1,3 +1,21 @@
+> **文件性質：原始設計構想（歷史紀錄）**
+>
+> 本文件記錄專案初期的規劃，**與目前實作已有相當差異**。
+> 保留的目的是作為「原始計畫 vs 實際成果」的對照依據。
+>
+> | 原始規劃 | 實際實作 | 變更原因 |
+> |---|---|---|
+> | Random Forest × 3 | 手工特徵 + ST-GCN + Shift-GCN 三系統比較 | 教授指定改用 ST-GCN；保留傳統模型作為對照基線 |
+> | `.mot` / `.trc` 檔案 | MediaPipe world landmarks JSON 直讀 | 轉檔會抹除代償動作訊號，且造成訓練與推論輸入不一致 |
+> | `database.csv` 中介格式 | `dataset_manifest.py` 直接對應標籤與骨架檔 | 中介 CSV 易與來源不同步 |
+> | SHAP 解釋 | 關節注意力彙總為臨床部位 | SHAP 不適用於圖神經網路的時空輸入 |
+> | 排程重訓（MLOps） | 未實作 | 31 人的樣本量下，重訓的效益低於改善收案品質 |
+>
+> **現況請見**：[README.md](README.md) · [RESULTS.md](RESULTS.md) ·
+> [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) · [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
+
+---
+
 # 系統設計文件 (DESIGN.md)：基於 OpenCap 骨架數據的肌少症偵測與 MLOps 系統
 
 ## [cite_start]1. 系統目標與使用情境 [cite: 33]

@@ -11,7 +11,7 @@
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | 開發歷程與**決策理由** | 接手/回顧/寫報告 |
 | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) | **推論介面規格** | 前端／伺服器組員 |
 | [results/data_health_report.md](results/data_health_report.md) | 資料品質與收案建議 | 與醫療機構討論 |
-| [DESIGN.md](DESIGN.md) | 原始系統設計構想 | 了解整體架構 |
+| [DESIGN.md](DESIGN.md) | 原始設計構想（歷史紀錄，與現況有差異） | 寫報告時對照「原始計畫 vs 實際成果」 |
 
 ---
 
