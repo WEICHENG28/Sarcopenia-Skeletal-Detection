@@ -174,19 +174,86 @@ def sit_features(xyz: np.ndarray, vis: np.ndarray) -> Dict[str, float]:
     }
 
 
+# 收案協定：蹲至最低點後停留約 3 秒。
+# 治療師說明：若不要求停留時間，長者容易蹲下即刻起身、或反覆快速上下，
+# 兩者皆有跌倒風險，因此協定明訂需在最低點維持。
+SQUAT_HOLD_TARGET_S = 3.0
+
+# 判定「仍在最低點」的膝角容許範圍（度）
+SQUAT_HOLD_TOLERANCE_DEG = 12.0
+
+
+# 低於此活動範圍視為「未實際完成下蹲」，此時停留時間不具意義
+SQUAT_MIN_ROM_DEG = 25.0
+
+
+def _hold_phase(knee: np.ndarray, tolerance: float = SQUAT_HOLD_TOLERANCE_DEG) -> Tuple[int, int]:
+    """找出停留在最低點的連續區間，回傳 (起點, 終點) 索引。
+
+    以最深處為中心，往前後延伸至膝角超出容許範圍為止。
+
+    容許範圍會依實際活動範圍收窄：若受試者幾乎沒有下蹲（如 A003 的 ROM 僅 12 度），
+    固定的 12 度容許範圍會把整段影片都判定為「停留」，產生假的長停留時間。
+    """
+    if len(knee) == 0:
+        return 0, 0
+
+    rom = float(np.ptp(knee))
+    effective_tolerance = min(tolerance, max(rom * 0.2, 1.0))
+
+    deepest = int(np.argmin(knee))
+    threshold = knee[deepest] + effective_tolerance
+
+    start = deepest
+    while start > 0 and knee[start - 1] <= threshold:
+        start -= 1
+
+    end = deepest
+    while end < len(knee) - 1 and knee[end + 1] <= threshold:
+        end += 1
+
+    return start, end
+
+
 def squat_features(xyz: np.ndarray, vis: np.ndarray) -> Dict[str, float]:
-    """半蹲：下肢肌力與關節活動度。"""
+    """半蹲：下肢肌力、關節活動度，以及最低點的維持能力。
+
+    協定為「蹲至最低點停留約 3 秒」，因此**維持階段**是核心觀察對象——
+    能否撐住、撐多久、撐的時候穩不穩，比單純的下蹲深度更貼近肌力表現。
+    """
     duration = len(xyz) / FPS
     knee = _knee_angles(xyz, vis)
     lean = _trunk_lean(xyz)
     extent = _vertical_extent(xyz, vis)
     smoothed_knee = _smooth(knee)
 
-    # 蹲最低時的軀幹前傾——代償策略的指標
     deepest_idx = int(np.argmin(smoothed_knee))
-
-    # 下蹲深度：鉛直伸展量從最高到最低的變化（已除以軀幹長，無量綱）
     depth = float(np.ptp(extent))
+
+    rom = float(np.ptp(smoothed_knee))
+    completed_squat = rom >= SQUAT_MIN_ROM_DEG
+
+    start, end = _hold_phase(smoothed_knee)
+    # 未實際完成下蹲者，其「停留時間」不具臨床意義，一律歸零並另以旗標標示
+    hold_duration = (end - start + 1) / FPS if completed_squat else 0.0
+    hold_slice = smoothed_knee[start : end + 1]
+
+    # 維持期間的膝角抖動：肌力不足者較難維持穩定姿勢
+    hold_tremor = float(hold_slice.std()) if len(hold_slice) > 1 else 0.0
+
+    # 維持期間的鉛直高度漂移：撐不住會慢慢往下沉或提早站起
+    hold_drift = float(np.ptp(extent[start : end + 1])) if end > start else 0.0
+
+    # 下降與起身的角速度（度/秒）
+    descent_speed = (
+        float((smoothed_knee[0] - smoothed_knee[deepest_idx]) / max(deepest_idx / FPS, 1e-3))
+        if deepest_idx > 0 else 0.0
+    )
+    ascent_frames = len(smoothed_knee) - 1 - deepest_idx
+    ascent_speed = (
+        float((smoothed_knee[-1] - smoothed_knee[deepest_idx]) / max(ascent_frames / FPS, 1e-3))
+        if ascent_frames > 0 else 0.0
+    )
 
     return {
         "duration_s": duration,
@@ -196,6 +263,15 @@ def squat_features(xyz: np.ndarray, vis: np.ndarray) -> Dict[str, float]:
         "trunk_lean_at_deepest_deg": float(lean[deepest_idx]),
         "trunk_lean_max_deg": float(lean.max()),
         "descent_ratio": deepest_idx / max(len(knee) - 1, 1),
+        # 以下為協定的維持階段指標
+        "completed_squat": 1.0 if completed_squat else 0.0,
+        "hold_duration_s": hold_duration,
+        "hold_ratio": hold_duration / SQUAT_HOLD_TARGET_S,
+        "meets_hold_protocol": 1.0 if (completed_squat and hold_duration >= SQUAT_HOLD_TARGET_S) else 0.0,
+        "hold_tremor_deg": hold_tremor,
+        "hold_drift": hold_drift,
+        "descent_speed_deg_s": descent_speed,
+        "ascent_speed_deg_s": ascent_speed,
     }
 
 
