@@ -112,13 +112,7 @@ src/
 ├── train_final.py          訓練並封存正式模型（供推論）
 ├── predict.py              ★ 推論服務入口（見 docs/API_CONTRACT.md）
 ├── ablation_actions.py     動作組合消融
-├── data_health_report.py   資料健檢報告產生器
-│
-├── models_shiftgcn.py      ⚠ 舊版，已停用
-├── train.py                ⚠ 舊版，已停用
-├── inference.py            ⚠ 舊版，已停用（改用 predict.py）
-├── api_inference.py        ⚠ 舊版，已停用
-└── bridge_mediapipe.py     ⚠ JSON → .trc 轉換，現行流程不使用
+└── data_health_report.py   資料健檢報告產生器
 
 models/                     正式模型（由 train_final.py 產生）
 tests/                      151 個單元測試
@@ -175,8 +169,7 @@ _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN �
 
 **推論介面規格見 [docs/API_CONTRACT.md](docs/API_CONTRACT.md)。**
 
-入口為 `src/predict.py` 的 `predict()`。舊版 `src/inference.py` 與
-`src/api_inference.py` 已停用（走 `.trc` 轉檔的舊架構），請勿使用。
+入口為 `src/predict.py` 的 `predict()`。
 
 ```python
 from src.predict import predict
