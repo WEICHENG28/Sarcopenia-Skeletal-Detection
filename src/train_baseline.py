@@ -191,6 +191,13 @@ def run(classifier: str = "logreg", n_repeats: int = 5) -> Dict[str, object]:
 
         fused_summary, fused_ci, _ = fuse_actions(results)
         group_payload["fusion"] = {"summary": fused_summary, "ci": list(fused_ci)}
+        # 逐人 out-of-fold 機率，供 src.ablation_actions 重新組合動作
+        group_payload["_subject_probabilities"] = {
+            r.action: r.subject_probabilities for r in results
+        }
+        group_payload["_subject_labels"] = {
+            r.action: r.subject_labels for r in results
+        }
         print("  " + format_summary("Late Fusion", fused_summary, fused_ci))
         print()
 
