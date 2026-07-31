@@ -38,8 +38,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = PROJECT_ROOT / "results"
 
 RANDOM_SEED = 42
-EPOCHS = 60
-PATIENCE = 15
+
+# 訓練折經內層切分後僅約 19 筆，batch_size=8 且 drop_last 代表
+# 每個 epoch 只有 2 次梯度更新。60 epochs 僅約 120 步，明顯訓練不足。
+#
+# 依據：以雜訊取代骨架、僅保留靜態特徵的診斷測試中，
+# OOF AUC 隨訓練量提升 0.526（60）→ 0.583（300）→ 0.614（600），
+# 於 300 之後趨緩。此診斷不涉及真實骨架的表現，故不構成對驗證集調參。
+EPOCHS = 300
+PATIENCE = 60
 BATCH_SIZE = 8
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-3
@@ -145,6 +152,53 @@ def _inner_split(
     return inner_train, inner_val
 
 
+def pretrain_on_synthetic(
+    action: str,
+    *,
+    model_name: str,
+    device: torch.device,
+    epochs: int = 150,
+    seed: int = RANDOM_SEED,
+) -> Dict[str, torch.Tensor]:
+    """在合成資料上預訓練，回傳權重供真實資料微調時作為起點。
+
+    只用骨架（motion-only）——合成資料的年齡–標籤關係與真實相反，
+    詳見 `src/synthetic_data.py`。
+
+    合成受試者與真實受試者完全不重疊，因此預訓練使用全部合成資料
+    不會洩漏任何真實驗證集的資訊。
+    """
+    from src.synthetic_data import build_synthetic_manifest
+
+    set_seed(seed)
+    samples = build_synthetic_manifest()
+    dataset = SkeletonDataset(
+        samples, action, use_static=False, augment=AugmentConfig(enabled=True)
+    )
+    loader = DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        drop_last=len(dataset) > BATCH_SIZE,
+    )
+
+    model = build_model(model_name, static_dim=0).to(device)
+    positives = float((dataset.labels == 1).sum())
+    negatives = float((dataset.labels == 0).sum())
+    criterion = nn.BCEWithLogitsLoss(
+        pos_weight=torch.tensor([negatives / max(positives, 1.0)], device=device)
+    )
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    )
+
+    for epoch in range(1, epochs + 1):
+        dataset.set_seed(seed * 1000 + epoch)
+        _run_epoch(model, loader, criterion, device, optimizer)
+
+    return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+
 def train_fold(
     dataset: SkeletonDataset,
     train_rows: Sequence[int],
@@ -153,6 +207,7 @@ def train_fold(
     model_name: str,
     device: torch.device,
     seed: int,
+    init_state: Dict[str, torch.Tensor] | None = None,
 ) -> FoldOutcome:
     """在單一折上訓練並回傳外層驗證集的預測。
 
@@ -194,6 +249,17 @@ def train_fold(
     )
 
     model = build_model(model_name, static_dim=dataset.static_dim).to(device)
+
+    if init_state is not None:
+        # 預訓練權重可能缺少 static 分支（預訓練為 motion-only），
+        # 因此只載入形狀相符的張量。
+        current = model.state_dict()
+        loadable = {
+            k: v for k, v in init_state.items()
+            if k in current and current[k].shape == v.shape
+        }
+        current.update(loadable)
+        model.load_state_dict(current)
 
     inner_labels = dataset.labels[inner_train]
     positives = float((inner_labels == 1).sum())
@@ -248,16 +314,25 @@ def train_action(
     n_splits: int = 5,
     n_repeats: int = 3,
     device: torch.device | None = None,
+    augment: AugmentConfig | None = None,
+    dataset: SkeletonDataset | None = None,
+    init_state: Dict[str, torch.Tensor] | None = None,
 ) -> Dict[str, object]:
-    """對單一動作跑完整交叉驗證。"""
+    """對單一動作跑完整交叉驗證。
+
+    Args:
+        augment: 覆寫增強設定，供消融實驗使用。
+        dataset: 直接指定資料集，供診斷實驗（例如以雜訊取代骨架）使用。
+    """
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    dataset = SkeletonDataset(
-        samples,
-        action,
-        use_static=(group == "combined"),
-        augment=AugmentConfig(enabled=True),
-    )
+    if dataset is None:
+        dataset = SkeletonDataset(
+            samples,
+            action,
+            use_static=(group == "combined"),
+            augment=augment or AugmentConfig(enabled=True),
+        )
     row_of = {subject: i for i, subject in enumerate(dataset.subject_ids)}
 
     collector = OOFCollector()
@@ -274,6 +349,7 @@ def train_action(
             model_name=model_name,
             device=device,
             seed=RANDOM_SEED + fold.repeat * 100 + fold.fold,
+            init_state=init_state,
         )
         collector.add(
             repeat=fold.repeat,
@@ -328,6 +404,7 @@ def run(
     groups: Sequence[str],
     *,
     n_repeats: int = 3,
+    pretrain: bool = False,
 ) -> Dict[str, object]:
     samples = build_manifest()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -343,10 +420,25 @@ def run(
     print("=" * 96)
     print()
 
+    pretrained: Dict[str, Dict[str, torch.Tensor]] = {}
+    if pretrain:
+        from src.synthetic_data import build_synthetic_manifest
+
+        synthetic = build_synthetic_manifest()
+        subjects = len({s.subject_id for s in synthetic})
+        print(f"以合成資料預訓練：{subjects} 位模擬個案 / {len(synthetic)} 筆樣本（僅骨架）")
+        for action in ACTIONS:
+            pretrained[action] = pretrain_on_synthetic(
+                action, model_name=model_name, device=device
+            )
+            print(f"  {action} 預訓練完成")
+        print()
+
     payload: Dict[str, object] = {
         "model": model_name,
         "parameters": parameters,
         "n_repeats": n_repeats,
+        "pretrained": pretrain,
         "groups": {},
     }
 
@@ -355,16 +447,24 @@ def run(
         action_results: Dict[str, Dict[str, object]] = {}
 
         for action in ACTIONS:
+            init_state = pretrained.get(action) if pretrain else None
             result = train_action(
                 samples, action,
                 model_name=model_name, group=group,
                 n_repeats=n_repeats, device=device,
+                init_state=init_state,
             )
             action_results[action] = result
             print("  " + format_summary(action, result["summary"], tuple(result["ci"])))
 
         fused_summary, fused_ci = fuse_actions(action_results)
         print("  " + format_summary("Late Fusion", fused_summary, fused_ci))
+
+        if group == "motion":
+            # 兩階段：GCN 只出骨架機率，年齡等交由 LogReg 處理
+            stacked_summary, stacked_ci = stack_with_demographics(action_results, samples)
+            print("  " + format_summary("Stacking + 人口學", stacked_summary, stacked_ci))
+            payload["stacking"] = {"summary": stacked_summary, "ci": list(stacked_ci)}
         print()
 
         payload["groups"][group] = {
@@ -382,6 +482,70 @@ def run(
     return payload
 
 
+def stack_with_demographics(
+    action_results: Dict[str, Dict[str, object]],
+    samples: Sequence[Sample],
+) -> Tuple[Dict[str, float], Tuple[float, float]]:
+    """兩階段融合：GCN 只負責骨架，年齡等資訊交由 Logistic Regression 處理。
+
+    動機（見 DEVELOPMENT_LOG 階段 4 的診斷）：
+    把骨架特徵與年齡丟進同一個網路聯合訓練時，GCN 分支輸出的 16 維
+    給了模型足夠自由度去背下約 19 筆訓練樣本，導致年齡這種簡單訊號
+    反而學不到——實測即使骨架換成純雜訊，AUC 仍從 0.728 掉到 0.526。
+
+    改為兩階段後，年齡由參數極少、正則化強的模型處理，不受此影響。
+
+    注意：第二階段使用的 GCN 機率本身是 out-of-fold 產物，
+    此為標準 stacking 做法，仍帶有輕微樂觀偏差，需在報告中說明。
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    from src.splits import make_folds
+
+    profile_of = {s.subject_id: s for s in samples}
+    subjects = sorted(set.intersection(*[
+        set(r["subject_probabilities"]) for r in action_results.values()
+    ]) if action_results else set())
+
+    def features(subject: str) -> List[float]:
+        sample = profile_of[subject]
+        row = [action_results[a]["subject_probabilities"][subject] for a in sorted(action_results)]
+        row += [sample.age, sample.bmi, sample.height_cm, sample.weight_kg,
+                1.0 if sample.gender.startswith("f") else 0.0]
+        return row
+
+    matrix = np.array([features(s) for s in subjects], dtype=np.float64)
+    labels = np.array([
+        list(action_results.values())[0]["subject_labels"][s] for s in subjects
+    ], dtype=int)
+    index_of = {s: i for i, s in enumerate(subjects)}
+
+    collector = OOFCollector()
+    for fold in make_folds(samples, n_repeats=5):
+        train_rows = [index_of[s] for s in fold.train_subjects if s in index_of]
+        val_rows = [index_of[s] for s in fold.val_subjects if s in index_of]
+        if not val_rows or len(set(labels[train_rows])) < 2:
+            continue
+
+        model = Pipeline([
+            ("scale", StandardScaler()),
+            ("clf", LogisticRegression(C=0.5, class_weight="balanced",
+                                       max_iter=2000, random_state=RANDOM_SEED)),
+        ])
+        model.fit(matrix[train_rows], labels[train_rows])
+        collector.add(
+            repeat=fold.repeat,
+            subjects=[subjects[i] for i in val_rows],
+            probabilities=model.predict_proba(matrix[val_rows])[:, 1],
+            labels=labels[val_rows],
+        )
+
+    _, probabilities, oof_labels = collector.mean_probabilities()
+    return collector.summary(), bootstrap_auc_ci(oof_labels, probabilities)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="訓練圖神經網路（系統 B / C）")
     parser.add_argument("--model", choices=["stgcn", "shiftgcn"], default="stgcn")
@@ -389,17 +553,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--all-groups", action="store_true")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--save", action="store_true")
+    parser.add_argument(
+        "--pretrain", action="store_true",
+        help="先以合成資料預訓練，再用真實個案微調",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     groups = FEATURE_GROUPS if args.all_groups else (args.group,)
-    payload = run(args.model, groups, n_repeats=args.repeats)
+    payload = run(args.model, groups, n_repeats=args.repeats, pretrain=args.pretrain)
 
     if args.save:
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        out_path = RESULTS_DIR / f"system_{args.model}.json"
+        suffix = "_pretrained" if args.pretrain else ""
+        out_path = RESULTS_DIR / f"system_{args.model}{suffix}.json"
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"結果已寫入：{out_path}")
 

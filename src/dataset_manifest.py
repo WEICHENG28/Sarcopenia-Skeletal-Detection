@@ -16,8 +16,17 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-LABEL_CSV_PATH = PROJECT_ROOT / "目前檔案範例" / "patient_data(summer).csv"
 DATA_DIR = PROJECT_ROOT / "data"
+
+# 真實個案的標籤 CSV。資料夾曾更名，這裡列出已知位置依序尋找。
+_LABEL_CSV_CANDIDATES = (
+    PROJECT_ROOT / "真資料+假資料" / "patient_data(summer).csv",
+    PROJECT_ROOT / "目前檔案範例" / "patient_data(summer).csv",
+    PROJECT_ROOT / "data" / "patient_data(summer).csv",
+)
+LABEL_CSV_PATH = next(
+    (p for p in _LABEL_CSV_CANDIDATES if p.exists()), _LABEL_CSV_CANDIDATES[0]
+)
 
 ACTIONS: Tuple[str, ...] = ("Sit", "Walk", "Squat")
 ACTION_DIRS: Dict[str, str] = {
@@ -38,6 +47,22 @@ EXCLUDED_SUBJECTS: Dict[str, str] = {
 # 單筆動作樣本排除（受試者其餘動作仍保留）
 EXCLUDED_SAMPLES: Dict[Tuple[str, str], str] = {
     ("A003", "Sit"): "visibility 僅 0.63（40% 幀 <0.5）、長度 40.5s 明顯偏離其他受試者，收案端確認先不使用",
+}
+
+# 收案端於 2026-07-30 提供的鍵入錯誤更正。
+#
+# 原始 CSV 曾被未修正的版本覆蓋過一次，導致 A009 體重 525kg（BMI 算出 246）
+# 直接污染所有含 BMI 的特徵。此處在程式內重新套用，避免同樣問題再次發生。
+# **來源 CSV 修好後即可刪除本區塊。**
+PROFILE_CORRECTIONS: Dict[str, Dict[str, float]] = {
+    "A009": {"weight_kg": 52.5},   # 原填 525.0
+    "A029": {"age": 74.0},         # 原填 142.0
+}
+
+# 目前這份 CSV 完全沒有這兩位的資料列，需整筆補上
+MISSING_SUBJECTS: Dict[str, Dict[str, object]] = {
+    "A003": {"label": 1, "age": 82.0, "height_cm": 148.0, "weight_kg": 63.5, "gender": "female"},
+    "A004": {"label": 1, "age": 72.0, "height_cm": 162.0, "weight_kg": 57.0, "gender": "male"},
 }
 
 
@@ -123,9 +148,11 @@ def load_subjects(csv_path: Path = LABEL_CSV_PATH) -> Dict[str, Subject]:
     for uid, uid_rows in profiles.items():
         labels = {_parse_binary_label(r.get("therapist_label") or "") for r in uid_rows}
         labels.discard(None)
+
         if len(labels) != 1:
             # 無標籤或標籤矛盾 → 不進訓練名冊
             continue
+        label = labels.pop()
 
         age = _parse_float(uid_rows[0].get("age") or "")
         height = _parse_float(uid_rows[0].get("height_cm") or "")
@@ -133,13 +160,27 @@ def load_subjects(csv_path: Path = LABEL_CSV_PATH) -> Dict[str, Subject]:
         if age is None or height is None or weight is None:
             continue
 
+        fixes = PROFILE_CORRECTIONS.get(uid, {})
         subjects[uid] = Subject(
             subject_id=uid,
-            label=labels.pop(),
-            age=age,
-            height_cm=height,
-            weight_kg=weight,
+            label=label,
+            age=fixes.get("age", age),
+            height_cm=fixes.get("height_cm", height),
+            weight_kg=fixes.get("weight_kg", weight),
             gender=(uid_rows[0].get("gender") or "").strip().lower(),
+        )
+
+    for uid, record in MISSING_SUBJECTS.items():
+        subjects.setdefault(
+            uid,
+            Subject(
+                subject_id=uid,
+                label=int(record["label"]),
+                age=float(record["age"]),
+                height_cm=float(record["height_cm"]),
+                weight_kg=float(record["weight_kg"]),
+                gender=str(record["gender"]),
+            ),
         )
 
     return subjects
