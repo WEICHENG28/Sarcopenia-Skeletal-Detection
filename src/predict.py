@@ -61,6 +61,10 @@ VISIBILITY_THRESHOLD = 0.5
 # 低於此比例的可見關節時，該動作的結果標記為低可信度
 LOW_CONFIDENCE_VISIBILITY = 0.80
 
+# 少於此影格數視為拍攝失敗。訓練資料中最短的樣本為 93 幀（約 3.1 秒），
+# 低於 30 幀（1 秒）不足以涵蓋任何一個完整動作週期。
+MIN_USABLE_FRAMES = 30
+
 
 @dataclass
 class ActionResult:
@@ -223,13 +227,30 @@ def _infer_action(
 
     if not json_path.exists():
         return ActionResult(action, False, weight=weight,
-                            reason=f"檔案不存在：{json_path}"), None
+                            reason=f"找不到骨架檔：{json_path.name}"), None
 
     try:
         raw = load_landmarks(json_path)
     except Exception as exc:
-        return ActionResult(action, False, weight=weight,
-                            reason=f"骨架檔解析失敗：{exc}"), None
+        # 訊息會直接顯示給治療師或受測者，因此描述「該怎麼做」而非技術細節，
+        # 且不揭露完整檔案路徑。
+        text = str(exc)
+        if "非空" in text or "empty" in text.lower():
+            reason = "影片中未偵測到人體，請確認人物完整入鏡且光線充足後重新拍攝"
+        elif "關節數不足" in text:
+            reason = "影片中人體偵測不完整，請確認全身入鏡後重新拍攝"
+        else:
+            reason = f"骨架檔無法解析（{json_path.name}）"
+        return ActionResult(action, False, weight=weight, reason=reason), None
+
+    if raw.shape[0] < MIN_USABLE_FRAMES:
+        return ActionResult(
+            action, False, weight=weight, frames=int(raw.shape[0]),
+            reason=(
+                f"有效影格僅 {raw.shape[0]} 幀（至少需 {MIN_USABLE_FRAMES} 幀），"
+                "請確認人物全程入鏡後重新拍攝"
+            ),
+        ), None
 
     visibility = float(raw[..., 3].mean())
     normalized = normalize_sequence(raw)
