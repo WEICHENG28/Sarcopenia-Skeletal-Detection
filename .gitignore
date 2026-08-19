@@ -1,3 +1,6 @@
 .venv_phase3/
 __pycache__/
 *.pyc
+
+# 伺服器上傳的資料（不進版控，含真實個案影片）
+data/uploads/

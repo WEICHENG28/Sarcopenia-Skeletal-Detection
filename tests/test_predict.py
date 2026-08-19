@@ -128,7 +128,32 @@ class TestPredictIntegration:
         assert result.ok is False
         assert result.risk_level == "無法評估"
         assert result.risk_probability is None
-        assert "檔案不存在" in result.per_action["Walk"]["reason"]
+        assert "找不到骨架檔" in result.per_action["Walk"]["reason"]
+
+    def test_error_messages_do_not_leak_full_paths(self, tmp_path):
+        """錯誤訊息會直接顯示給治療師，不應揭露伺服器的完整路徑。"""
+        broken = tmp_path / "Broken_Walk.json"
+        broken.write_text("[]", encoding="utf-8")
+        result = predict(VALID_PROFILE, {"Walk": str(broken)})
+        reason = result.per_action["Walk"]["reason"]
+        assert str(tmp_path) not in reason
+
+    def test_empty_skeleton_gives_actionable_message(self, tmp_path):
+        """影片未偵測到人體時，訊息須說明該怎麼做，而非技術細節。"""
+        empty = tmp_path / "Empty_Walk.json"
+        empty.write_text("[]", encoding="utf-8")
+        result = predict(VALID_PROFILE, {"Walk": str(empty)})
+        assert result.ok is False
+        assert "重新拍攝" in result.per_action["Walk"]["reason"]
+
+    def test_too_short_clip_is_rejected(self, tmp_path, sample_paths):
+        """影格過少不足以涵蓋一個動作週期，應拒絕而非產出無意義的分數。"""
+        frames = json.loads(Path(sample_paths["Walk"]).read_text(encoding="utf-8"))
+        short = tmp_path / "Short_Walk.json"
+        short.write_text(json.dumps(frames[:10]), encoding="utf-8")
+        result = predict(VALID_PROFILE, {"Walk": str(short)})
+        assert result.ok is False
+        assert "影格" in result.per_action["Walk"]["reason"]
 
     def test_unknown_action_raises(self, sample_paths):
         with pytest.raises(ValueError, match="不支援的動作"):

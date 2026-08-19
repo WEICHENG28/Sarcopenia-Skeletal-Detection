@@ -1,6 +1,8 @@
-# 肌少症骨架偵測系統 — 模型端
+# 肌少症骨架偵測系統
 
-從 MediaPipe 骨架動作資料判斷受試者是否有肌少症風險，並提供可解釋的判斷依據。
+從影片判斷受試者是否有肌少症風險，並提供可解釋的判斷依據。
+
+涵蓋前端網頁、後端伺服器、影片轉骨架、以及模型訓練與推論的完整流程。
 
 ## 文件導覽
 
@@ -94,9 +96,40 @@ pytest tests/ -q
 
 ---
 
+## 啟動伺服器（前端 + 後端）
+
+```bash
+setup.bat          # 首次執行：安裝套件並訓練模型
+start_server.bat   # 啟動，瀏覽器開啟 http://localhost:8000
+```
+
+或手動：
+
+```bash
+pip install -r requirements.txt
+python -m src.train_final                  # 產生 models/
+python -m uvicorn api_server:app --port 8000
+```
+
+| 端點 | 用途 |
+|---|---|
+| `GET /` | 前端網頁 |
+| `GET /health` | 健康檢查（確認模型檔是否就緒） |
+| `POST /upload_data/` | 上傳影片 → 擷取骨架 → 評估風險 |
+| `GET /result/{user_id}` | 以現有骨架重新評估，不需重新上傳 |
+| `POST /label/` | 治療師標記診斷結果 |
+| `GET /docs` | FastAPI 自動產生的 API 文件 |
+
+---
+
 ## 程式結構
 
 ```
+api_server.py               FastAPI 伺服器（上傳、評估、標記）
+extract_to_json.py          影片 → MediaPipe 骨架 JSON
+static/index.html           前端網頁
+pose_landmarker_heavy.task  MediaPipe 模型檔
+
 src/
 ├── dataset_manifest.py     訓練名冊：標籤 CSV ↔ 骨架 JSON 對應，排除規則
 ├── skeleton_io.py          骨架前處理：座標軸修正、正規化、bone stream
@@ -115,6 +148,7 @@ src/
 └── data_health_report.py   資料健檢報告產生器
 
 models/                     正式模型（由 train_final.py 產生）
+data/uploads/               伺服器上傳資料（不進版控）
 tests/                      151 個單元測試
 results/                    訓練結果、消融結果、資料健檢報告
 _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN 時期）

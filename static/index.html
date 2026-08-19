@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 肌少症收案系統 | 專業版</title>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --success-color: #10b981;
+            --danger-color: #f43f5e;
+            --warning-color: #f59e0b;
+            --bg-color: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --base-font-size: 18px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+            margin: 0;
+            color: var(--text-main);
+            font-size: var(--base-font-size);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .font-control-bar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .font-btn {
+            border: none;
+            background: #e2e8f0;
+            padding: 8px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .font-btn:hover { background: var(--primary-color); color: white; }
+        .font-btn.active { background: var(--primary-color); color: white; }
+
+        .main-wrapper {
+            max-width: 1000px;
+            margin: 80px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+            padding: 50px;
+        }
+
+        h1 { font-size: 2.2em; color: var(--primary-color); margin: 0; text-align: center; }
+        .subtitle { text-align: center; opacity: 0.5; margin: 15px 0 40px 0; font-size: 1.1em; }
+
+        .input-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .input-box label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 18px;
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            font-size: 1em;
+            background: #f8fafc;
+            transition: 0.3s;
+            color: var(--text-main);
+        }
+        input:focus, select:focus { border-color: var(--primary-color); background: white; outline: none; }
+
+        .video-container {
+            background: #000;
+            border-radius: 25px;
+            aspect-ratio: 16 / 9;
+            margin-bottom: 40px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border: 5px solid white;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .btn {
+            padding: 25px 15px;
+            border: none;
+            border-radius: 20px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary { background: var(--primary-color); }
+        .btn-success { background: var(--success-color); }
+        .btn-danger { background: var(--danger-color); }
+
+        .btn-submit {
+            grid-column: span 3;
+            margin-top: 30px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 50px;
+            font-size: 1.3em;
+            padding: 30px;
+        }
+
+        .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+
+        /* 上傳進度 */
+        .progress-area {
+            display: none;
+            margin-top: 20px;
+            background: #f8fafc;
+            border-radius: 20px;
+            padding: 25px;
+        }
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 12px 0;
+            font-size: 1em;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .progress-step:last-child { border-bottom: none; }
+        .step-icon { font-size: 1.4em; width: 30px; text-align: center; }
+        .step-text { flex: 1; }
+        .step-status { font-weight: bold; }
+        .status-waiting { color: #94a3b8; }
+        .status-uploading { color: var(--warning-color); }
+        .status-done { color: var(--success-color); }
+        .status-error { color: var(--danger-color); }
+
+        /* 結果頁面 */
+        .result-view { text-align: center; display: none; }
+        .result-score { font-size: 4.5em; font-weight: 900; margin: 30px 0; }
+        .advice-box {
+            background: #f1f5f9;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: left;
+            line-height: 1.7;
+            font-size: 1.1em;
+            border-left: 8px solid var(--primary-color);
+            white-space: pre-line;
+        }
+        .features-box {
+            background: #eff6ff;
+            padding: 20px 30px;
+            border-radius: 20px;
+            text-align: left;
+            margin-top: 20px;
+            font-size: 1em;
+            border-left: 8px solid var(--primary-color);
+        }
+        .features-box ul { margin: 10px 0 0 0; padding-left: 20px; line-height: 2; }
+
+        /* 治療師標記區 */
+        .label-box {
+            background: #fefce8;
+            border: 2px dashed #f59e0b;
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 25px;
+            text-align: center;
+        }
+        .label-title { font-size: 1.2em; font-weight: bold; margin-bottom: 20px; color: #92400e; }
+        .label-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
+        .btn-sarco    { background: var(--danger-color); }
+        .btn-no-sarco { background: var(--success-color); }
+        .label-done {
+            font-size: 1.1em; font-weight: bold; padding: 15px;
+            border-radius: 15px; margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="font-control-bar">
+        <span style="font-size: 16px; font-weight: bold;">字體顯示：</span>
+        <button class="font-btn" onclick="updateFontSize('16px', this)">標準</button>
+        <button class="font-btn" onclick="updateFontSize('24px', this)">較大</button>
+        <button class="font-btn active" onclick="updateFontSize('32px', this)">特大(推薦長輩)</button>
+    </div>
+
+    <div class="main-wrapper">
+        <div class="card">
+
+            <div id="recordView">
+                <div class="header">
+                    <h1>🦾 肌少症 AI 篩檢系統</h1>
+                    <div class="subtitle">專業醫學影像採集與分析</div>
+                </div>
+
+                <div class="input-section">
+                    <div class="input-box"><label>受測者編號</label><input type="text" id="subjectId" placeholder="P001"></div>
+                    <div class="input-box"><label>年齡</label><input type="number" id="age" placeholder="75"></div>
+                    <div class="input-box"><label>身高 (cm)</label><input type="number" id="height" placeholder="165"></div>
+                    <div class="input-box"><label>體重 (kg)</label><input type="number" id="weight" placeholder="60"></div>
+                    <div class="input-box" style="grid-column: span 2;">
+                        <label>性別</label>
+                        <select id="gender">
+                            <option value="">-- 請選擇 --</option>
+                            <option value="male">男性</option>
+                            <option value="female">女性</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="video-container">
+                    <video id="webcam" autoplay playsinline muted></video>
+                </div>
+
+                <div class="btn-grid">
+                    <button class="btn btn-primary" id="btnSit" onclick="toggleRecording('sit', 'btnSit', '起立坐下')">錄製：起立坐下</button>
+                    <button class="btn btn-primary" id="btnWalk" onclick="toggleRecording('walk', 'btnWalk', '走三公尺')">錄製：走三公尺</button>
+                    <button class="btn btn-primary" id="btnSquat" onclick="toggleRecording('squat', 'btnSquat', '半蹲')">錄製：半蹲</button>
+                    <button class="btn btn-submit" id="btnSubmit" onclick="startUpload()">🚀 傳送影片進行 AI 分析</button>
+                </div>
+
+                <div class="progress-area" id="progressArea">
+                    <div class="progress-step" id="stepSit">
+                        <span class="step-icon">🪑</span>
+                        <span class="step-text">起立坐下影片</span>
+                        <span class="step-status status-waiting" id="statusSit">等待中</span>
+                    </div>
+                    <div class="progress-step" id="stepWalk">
+                        <span class="step-icon">🚶</span>
+                        <span class="step-text">走三公尺影片</span>
+                        <span class="step-status status-waiting" id="statusWalk">等待中</span>
+                    </div>
+                    <div class="progress-step" id="stepSquat">
+                        <span class="step-icon">🏋️</span>
+                        <span class="step-text">半蹲影片</span>
+                        <span class="step-status status-waiting" id="statusSquat">等待中</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resultView" class="result-view">
+                <div class="header">
+                    <h1>📋 診斷分析報告</h1>
+                    <div id="resInfo" class="subtitle">受測者：-</div>
+                </div>
+                <div class="result-score" id="resProb">0%</div>
+                <div style="font-size: 1.6em; font-weight: bold; margin-bottom: 30px;">
+                    風險等級：<span id="resLevel">-</span>
+                </div>
+                <div class="advice-box">
+                    <strong style="font-size: 1.2em;">💡 AI 專業健康建議：</strong><hr>
+                    <span id="resAdvice">-</span>
+                </div>
+                <div class="features-box" id="featuresBox" style="display:none;">
+                    <strong>📊 主要影響因子：</strong>
+                    <ul id="featuresList"></ul>
+                </div>
+                <!-- 治療師診斷標記 -->
+                <div class="label-box" id="labelBox">
+                    <div class="label-title">🩺 治療師診斷標記</div>
+                    <div style="opacity: 0.7; margin-bottom: 15px; font-size: 0.95em;">請根據臨床判斷標記此受測者的實際診斷結果</div>
+                    <div class="label-btn-grid">
+                        <button class="btn btn-sarco" onclick="saveDiagnosis(1)">有肌少症</button>
+                        <button class="btn btn-no-sarco" onclick="saveDiagnosis(0)">無肌少症</button>
+                    </div>
+                    <div class="label-done" id="labelDone"></div>
+                </div>
+
+                <button class="btn btn-primary" style="margin-top: 40px; width: 100%; border-radius: 50px;" onclick="location.reload()">完成，錄製下一位</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ── 設定後端位址 ──────────────────────────────────────────
+        const API_BASE = window.location.origin;
+
+        // ── 狀態變數 ──────────────────────────────────────────────
+        let stream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let videoData = { sit: null, walk: null, squat: null };
+        let timerInterval = null;
+        let startTime = 0;
+        let currentUserId = null;
+
+        // ── 動作對應後端 action 名稱 ──────────────────────────────
+        const ACTION_MAP = { sit: "Sit", walk: "Walk", squat: "Squat" };
+
+        // ── 啟動鏡頭（30 FPS）────────────────────────────────────
+        window.onload = async function() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30, max: 30 }
+                    }
+                });
+                document.getElementById('webcam').srcObject = stream;
+            } catch (err) {
+                alert("相機讀取失敗，請確認攝影機已連接。");
+            }
+        };
+
+        // ── 字體控制 ──────────────────────────────────────────────
+        function updateFontSize(size, btnElement) {
+            document.documentElement.style.setProperty('--base-font-size', size);
+            document.querySelectorAll('.font-btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+
+        // ── 錄影切換 ──────────────────────────────────────────────
+        function toggleRecording(actionId, btnId, actionName) {
+            const btn = document.getElementById(btnId);
+
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                clearInterval(timerInterval);
+                let totalSec = Math.floor((Date.now() - startTime) / 1000);
+                btn.innerText = `✅ ${actionName} (${totalSec}s)`;
+                btn.style.backgroundColor = "#10b981";
+                setBtnState(btnId, false);
+                return;
+            }
+
+            if (videoData[actionId] && !confirm(`確定要重錄【${actionName}】嗎？影片將被覆蓋。`)) return;
+
+            setBtnState(btnId, true);
+            recordedChunks = [];
+
+            // 優先使用 mp4，不支援則退回 webm
+            const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+            mediaRecorder = new MediaRecorder(stream, { mimeType });
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                videoData[actionId] = new Blob(recordedChunks, { type: mimeType });
+            };
+
+            mediaRecorder.start();
+            btn.style.backgroundColor = "#f43f5e";
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                let sec = Math.floor((Date.now() - startTime) / 1000);
+                btn.innerText = `⏹️ 錄製中... ${sec}秒`;
+            }, 1000);
+        }
+
+        function setBtnState(activeId, disabled) {
+            ['btnSit', 'btnWalk', 'btnSquat'].forEach(id => {
+                if (id !== activeId) document.getElementById(id).disabled = disabled;
+            });
+        }
+
+        // ── 更新進度狀態 ──────────────────────────────────────────
+        function setStatus(action, state, text) {
+            const el = document.getElementById(`status${action}`);
+            el.className = `step-status status-${state}`;
+            el.innerText = text;
+        }
+
+        // ── 上傳單支影片 ──────────────────────────────────────────
+        async function uploadVideo(actionId, formBase) {
+            const blob = videoData[actionId];
+            const actionName = ACTION_MAP[actionId];
+            const statusKey = actionName; // Sit / Walk / Squat
+
+            setStatus(statusKey, 'uploading', '上傳中...');
+
+            const form = new FormData();
+            form.append('user_id',     formBase.user_id);
+            form.append('age',         formBase.age);
+            form.append('height_cm',   formBase.height_cm);
+            form.append('weight_kg',   formBase.weight_kg);
+            form.append('gender',      formBase.gender);
+            form.append('action',      actionName);
+
+            const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+            form.append('video_file',  blob, `${formBase.user_id}_${actionName}.${ext}`);
+
+            const res = await fetch(`${API_BASE}/upload_data/`, {
+                method: 'POST',
+                headers: { 'ngrok-skip-browser-warning': '1' },
+                body: form
+            });
+            if (!res.ok) throw new Error(`${actionName} 上傳失敗 (HTTP ${res.status})`);
+
+            setStatus(statusKey, 'done', '完成 ✓');
+            return await res.json();
+        }
+
+        // ── 主上傳流程 ────────────────────────────────────────────
+        async function startUpload() {
+            const sid    = document.getElementById('subjectId').value.trim();
+            const age    = document.getElementById('age').value.trim();
+            const height = document.getElementById('height').value.trim();
+            const weight = document.getElementById('weight').value.trim();
+            const gender = document.getElementById('gender').value;
+
+            if (!sid)    { alert("請輸入受測者編號！"); return; }
+            if (!age)    { alert("請輸入年齡！"); return; }
+            if (!height) { alert("請輸入身高！"); return; }
+            if (!weight) { alert("請輸入體重！"); return; }
+            if (!gender) { alert("請選擇性別！"); return; }
+
+            const recorded = Object.keys(videoData).filter(k => videoData[k] !== null);
+            if (recorded.length === 0) { alert("請至少錄製一段影片！"); return; }
+
+            const formBase = { user_id: sid, age, height_cm: height, weight_kg: weight, gender };
+
+            // 顯示進度區域
+            document.getElementById('progressArea').style.display = 'block';
+            document.getElementById('btnSubmit').disabled = true;
+            document.getElementById('btnSubmit').innerText = "⏳ AI 分析中，請稍候...";
+
+            // 未錄製的動作標記為跳過
+            ['Sit','Walk','Squat'].forEach(a => {
+                const key = a.toLowerCase();
+                if (!videoData[key]) setStatus(a, 'waiting', '未錄製，略過');
+            });
+
+            let lastResult = null;
+            try {
+                for (const actionId of ['sit', 'walk', 'squat']) {
+                    if (!videoData[actionId]) continue;
+                    lastResult = await uploadVideo(actionId, formBase);
+                }
+            } catch (err) {
+                const actionName = err.message.split(' ')[0];
+                setStatus(actionName, 'error', '失敗 ✗');
+                document.getElementById('btnSubmit').disabled = false;
+                document.getElementById('btnSubmit').innerText = "🚀 傳送影片進行 AI 分析";
+                alert(`上傳失敗：${err.message}\n請確認後端伺服器是否已啟動（${API_BASE}）`);
+                return;
+            }
+
+            showResult(sid, lastResult);
+        }
+
+        // ── 顯示結果 ──────────────────────────────────────────────
+        function showResult(sid, data) {
+            // 風險機率在 inference_result 內層
+            const infer = data.inference_result ?? {};
+            const prob  = infer.risk_probability ?? 0;
+            const pct   = Math.round(prob * 100);
+
+            // 風險等級由伺服器提供，門檻與模型交叉驗證的結果一致。
+            // 舊版前端自行以 0.6 / 0.3 判斷，與模型實際門檻（0.70 / 0.513 / 0.35）不符。
+            const serverLevel = infer.risk_level ?? '';
+            let level, levelColor, advice;
+            if (serverLevel === '無法評估') {
+                level = "無法評估";
+                levelColor = "var(--warning-color)";
+                advice = "【分析結果】資料不足以產出評估。請確認影片已成功上傳，且人物完整入鏡。";
+            } else if (serverLevel === '高' || (!serverLevel && prob >= 0.70)) {
+                level = "高風險 (High Risk)";
+                levelColor = "var(--danger-color)";
+                advice = "【分析結果】動作表現顯示較明顯的肌少症徵象，建議：\n1. 至家醫科或復健科接受完整評估（握力、步速、肌肉量）。\n2. 在專業指導下進行漸進式阻力訓練。\n3. 增加優質蛋白質攝取，每公斤體重約 1.2g/天。\n4. 補充維生素 D，並增加戶外活動。";
+            } else if (serverLevel === '中高' || (!serverLevel && prob >= 0.513)) {
+                level = "中高風險 (Moderate-High Risk)";
+                levelColor = "var(--danger-color)";
+                advice = "【分析結果】多項動作表現低於同齡標準，建議：\n1. 安排復健科或家醫科評估。\n2. 每週 3 次以上阻力訓練，搭配有氧運動。\n3. 注意每餐蛋白質攝取。\n4. 三個月後回診追蹤。";
+            } else if (serverLevel === '中低' || (!serverLevel && prob >= 0.35)) {
+                level = "中低風險 (Moderate-Low Risk)";
+                levelColor = "var(--warning-color)";
+                advice = "【分析結果】部分動作表現略低於標準，建議：\n1. 每週進行 3 次以上有氧運動（快走、騎車）。\n2. 注意蛋白質攝取，每餐均衡攝入。\n3. 每半年回診追蹤，持續觀察肌肉功能變化。";
+            } else {
+                level = "低風險 (Low Risk)";
+                levelColor = "var(--success-color)";
+                advice = "【分析結果】動作功能表現良好，維持現有生活習慣：\n1. 持續規律運動，每週至少 150 分鐘中等強度活動。\n2. 均衡飲食，維持適當體重。\n3. 每年定期健康檢查。";
+            }
+
+            // 篩檢工具的必要聲明：模型以 31 位個案訓練，屬可行性研究等級
+            advice += "\n\n※ 本評估為篩檢參考，不可取代專業醫療診斷。";
+
+            document.getElementById('resInfo').innerText = `受測者編號：${sid}`;
+            document.getElementById('resProb').innerText = `${pct}%`;
+            document.getElementById('resProb').style.color = levelColor;
+            document.getElementById('resLevel').innerText = level;
+            document.getElementById('resLevel').style.color = levelColor;
+            document.getElementById('resAdvice').innerText = advice;
+
+            // 顯示影響因子（若有）
+            if (infer.top_features && infer.top_features.length > 0) {
+                const list = document.getElementById('featuresList');
+                list.innerHTML = '';
+                infer.top_features.forEach(f => {
+                    const li = document.createElement('li');
+                    li.innerText = f;
+                    list.appendChild(li);
+                });
+                document.getElementById('featuresBox').style.display = 'block';
+            }
+
+            currentUserId = sid;
+            document.getElementById('recordView').style.display = 'none';
+            document.getElementById('resultView').style.display  = 'block';
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            window.scrollTo(0, 0);
+        }
+
+        // ── 治療師診斷標記 ────────────────────────────────────────
+        async function saveDiagnosis(label) {
+            const labelText = label === 1 ? '有肌少症' : '無肌少症';
+            if (!confirm(`確定標記【${currentUserId}】為「${labelText}」嗎？`)) return;
+
+            // 停用按鈕防止重複送出
+            document.querySelectorAll('.btn-sarco, .btn-no-sarco').forEach(b => b.disabled = true);
+
+            try {
+                const form = new FormData();
+                form.append('user_id', currentUserId);
+                form.append('label', label);
+
+                const res = await fetch(`${API_BASE}/label/`, {
+                    method: 'POST',
+                    headers: { 'ngrok-skip-browser-warning': '1' },
+                    body: form
+                });
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const doneEl = document.getElementById('labelDone');
+                doneEl.style.display = 'block';
+                doneEl.style.background = label === 1 ? '#fee2e2' : '#d1fae5';
+                doneEl.style.color = label === 1 ? '#991b1b' : '#065f46';
+                doneEl.innerText = `✓ 已儲存：${labelText}`;
+            } catch (err) {
+                alert(`標記儲存失敗：${err.message}`);
+                document.querySelectorAll('.btn-sarco, .btn-no-sarco').forEach(b => b.disabled = false);
+            }
+        }
+    </script>
+</body>
+</html>
