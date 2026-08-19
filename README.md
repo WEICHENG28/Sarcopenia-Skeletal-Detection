@@ -25,19 +25,27 @@
 
 | 項目 | 數量 |
 |---|---|
-| 受試者 | 31 人（陽性 12 / 陰性 19） |
-| 動作樣本 | 92 筆 |
+| 真實受試者 | 31 人（陽性 12 / 陰性 19） |
+| 動作樣本 | 92 筆（Sit 30、Walk 31、Squat 31） |
+| 合成受試者 | 58 人（僅供預訓練，不參與評估） |
 | 影片規格 | 720p / 30fps |
 | 骨架格式 | MediaPipe `pose_world_landmarks`，33 點 × (x, y, z, visibility) |
 
 ```
 data/
-├── A_sit_json/     A003_Sit.json ...
-├── A_walk_json/    A003_Walk.json ...
-└── A_squat_json/   A003_Squat.json ...
+├── A_sit_json/     真實個案：A003_Sit.json ...
+├── A_walk_json/
+├── A_squat_json/
+└── uploads/        伺服器上傳的資料（不進版控）
 
-目前檔案範例/patient_data(summer).csv   標籤與基本資料
+真資料+假資料/
+├── patient_data(summer).csv   真實個案的標籤與基本資料
+├── patient_data.csv           合成個案的標籤
+├── sit_json/ walk/ squat_json/   合成骨架（S001–S066）
 ```
+
+**合成資料只用於預訓練**，且僅使用骨架、不使用其年齡等欄位——
+合成資料的年齡與標籤關係與真實資料相反（詳見 [RESULTS.md](RESULTS.md)）。
 
 > **注意**：本 repo 含真實個案資料（編號化，無姓名）。
 > 請維持 repository 為 private，勿轉載至公開場所。
@@ -148,8 +156,8 @@ src/
 └── data_health_report.py   資料健檢報告產生器
 
 models/                     正式模型（由 train_final.py 產生）
-data/uploads/               伺服器上傳資料（不進版控）
-tests/                      151 個單元測試
+docs/API_CONTRACT.md        推論介面規格
+tests/                      154 個單元測試
 results/                    訓練結果、消融結果、資料健檢報告
 _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN 時期）
 ```
@@ -178,24 +186,64 @@ _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN �
 ## 目前進度
 
 ```
-【準備階段】
+【資料與基礎建設】
   ✅ 訓練名冊（31 人 / 92 樣本）
   ✅ 骨架前處理（座標軸修正、正規化、bone stream）
-  ✅ 交叉驗證切分（按人分組）
-  ✅ 手工特徵萃取
-  ✅ 單元測試（85 個）
+  ✅ 交叉驗證切分（按人分組，避免資料洩漏）
+  ✅ 單元測試（154 個）
 
-【模型訓練階段】
+【模型】
   ✅ 系統 A：手工特徵 + LogReg / RandomForest
   ✅ 系統 B：ST-GCN（含合成資料預訓練）
   ✅ 系統 C：Shift-GCN
-  ✅ 動作組合消融
+  ✅ 動作組合消融、錯誤案例分析
 
-【收尾階段】
-  ✅ 資料健檢報告（回饋收案端拍攝品質）
-  ✅ 推論模組 + 伺服器整合契約
-  ✅ 三系統比較報告
+【產品】
+  ✅ 前端網頁 + FastAPI 伺服器 + 影片轉骨架
+  ✅ 推論模組與 API 契約
+  ✅ 資料健檢報告（回饋收案端）
 ```
+
+---
+
+## 持續收案與重新訓練
+
+每收到一批新個案後的流程：
+
+```bash
+# 1. 收案：治療師用網頁上傳影片並標記
+start_server.bat        # 資料存到 data/uploads/
+
+# 2. 人工策展：把要納入訓練的個案搬進訓練集
+#    骨架 JSON → data/A_sit_json/ 等
+#    標籤      → 真資料+假資料/patient_data(summer).csv
+
+# 3. 檢查資料完整性（會抓出人數不符、生理數值異常）
+pytest tests/test_dataset_manifest.py -q
+
+# 4. 重新訓練與評估
+python -m src.train_gcn --model stgcn --all-groups --pretrain --save
+python -m src.train_baseline --classifier logreg --save
+
+# 5. 更新健檢報告
+python -m src.data_health_report --save
+
+# 6. 滿意後封存新模型（前後端無須改動，自動使用新模型）
+python -m src.train_final
+```
+
+**第 2 步刻意保持人工**——伺服器不會自動把上傳資料寫入訓練集，
+避免未經稽核的資料在無人察覺的情況下影響實驗結果。
+
+### 判斷「準確度是否足夠」的依據
+
+| 指標 | 目前 | 目標 |
+|---|---|---|
+| AUC 的 95% 信賴區間 | [0.64, 0.95] | 收窄至不再涵蓋 0.794（單看年齡的基準） |
+| 純骨架 AUC | 0.789 | 明顯超過人口學基準，方能證明動作分析的價值 |
+| 兩組年齡差距 | 13 歲 | 補收 80 歲以上健康者與 75 歲以下患者以縮小 |
+
+信賴區間會隨樣本數增加而收窄，是最直接的進度指標。
 
 ---
 
