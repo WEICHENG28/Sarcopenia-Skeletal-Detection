@@ -12,6 +12,7 @@
 | [RESULTS.md](RESULTS.md) | 三系統比較的實驗數據 | 想看模型表現 |
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | 開發歷程與**決策理由** | 接手/回顧/寫報告 |
 | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) | **推論介面規格** | 前端／伺服器組員 |
+| [figures/README.md](figures/README.md) | **21 張圖表**：資料、特徵、模型、結果 | 快速理解專案、簡報素材 |
 | [results/data_health_report.md](results/data_health_report.md) | 資料品質與收案建議 | 與醫療機構討論 |
 | [DESIGN.md](DESIGN.md) | 原始設計構想（歷史紀錄，與現況有差異） | 寫報告時對照「原始計畫 vs 實際成果」 |
 
@@ -90,6 +91,9 @@ python -m src.ablation_actions --save
 # 產生資料健檢報告
 python -m src.data_health_report --save
 
+# 產生全部圖表（輸出至 figures/）
+python -m src.figures
+
 # 訓練並封存正式模型
 python -m src.train_final
 
@@ -153,9 +157,11 @@ src/
 ├── train_final.py          訓練並封存正式模型（供推論）
 ├── predict.py              ★ 推論服務入口（見 docs/API_CONTRACT.md）
 ├── ablation_actions.py     動作組合消融
-└── data_health_report.py   資料健檢報告產生器
+├── data_health_report.py   資料健檢報告產生器
+└── figures/                圖表產生器（style / data_access / plots_*）
 
 models/                     正式模型（由 train_final.py 產生）
+figures/                    21 張圖表 + 索引
 docs/API_CONTRACT.md        推論介面規格
 tests/                      154 個單元測試
 results/                    訓練結果、消融結果、資料健檢報告
