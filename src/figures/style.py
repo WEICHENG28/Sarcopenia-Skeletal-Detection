@@ -49,6 +49,9 @@ def setup() -> None:
     plt.rcParams["axes.unicode_minus"] = False
 
     plt.rcParams.update({
+        # TrueType（42）而非預設的 Type 3，讓 PDF 內的文字可搜尋、可複製
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
         "figure.dpi": 130,
         "savefig.dpi": 180,
         "savefig.bbox": "tight",

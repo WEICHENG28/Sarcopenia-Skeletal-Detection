@@ -13,6 +13,7 @@
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | 開發歷程與**決策理由** | 接手/回顧/寫報告 |
 | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) | **推論介面規格** | 前端／伺服器組員 |
 | [figures/README.md](figures/README.md) | **21 張圖表**：資料、特徵、模型、結果 | 快速理解專案、簡報素材 |
+| [圖表報告 PDF](figures/肌少症偵測系統_圖表報告.pdf) | 28 頁，含封面、目錄、逐圖說明 | **下載傳閱給醫療人員／教授** |
 | [results/data_health_report.md](results/data_health_report.md) | 資料品質與收案建議 | 與醫療機構討論 |
 | [DESIGN.md](DESIGN.md) | 原始設計構想（歷史紀錄，與現況有差異） | 寫報告時對照「原始計畫 vs 實際成果」 |
 
@@ -93,6 +94,9 @@ python -m src.data_health_report --save
 
 # 產生全部圖表（輸出至 figures/）
 python -m src.figures
+
+# 把圖表彙整成 PDF（28 頁，可下載傳閱）
+python -m src.figures.report
 
 # 訓練並封存正式模型
 python -m src.train_final
