@@ -41,8 +41,7 @@ class TestManifestIntegrity:
     """對照實際資料的整合測試。"""
 
     @pytest.fixture(scope="class")
-    @classmethod
-    def manifest(cls):
+    def manifest(self):
         return build_manifest()
 
     def test_expected_subject_and_sample_count(self, manifest):

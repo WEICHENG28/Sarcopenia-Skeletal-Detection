@@ -38,8 +38,7 @@ class TestHopDistances:
 
 class TestPartitionedAdjacency:
     @pytest.fixture(scope="class")
-    @classmethod
-    def adjacency(cls):
+    def adjacency(self):
         return build_partitioned_adjacency()
 
     def test_shape(self, adjacency):
