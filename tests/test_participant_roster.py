@@ -46,4 +46,13 @@ def test_similar_but_not_registered_name_does_not_match():
 def test_generated_roster_is_readable():
     assert ROSTER_PATH.exists()
     records = read_roster_rows()
-    assert [record["participant_id"] for record in records] == ["SB01", "SB02"]
+    assert [record["participant_id"] for record in records] == ["SB01", "SB02", "SB03"]
+    assert records[2] == {
+        "participant_id": "SB03",
+        "name": "Adam Wang",
+        "name_aliases": "Adam",
+        "age": 45,
+        "height_cm": 167.0,
+        "weight_kg": 65.0,
+        "gender": "male",
+    }
