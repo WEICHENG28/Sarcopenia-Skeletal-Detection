@@ -21,15 +21,19 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
+from xml.etree import ElementTree
 
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -37,6 +41,7 @@ if str(BASE_DIR) not in sys.path:
 
 from src.dataset_manifest import ACTIONS
 from src.predict import predict
+from webcam_capture import CAMERA_NAME, CameraHub
 
 # 上傳資料與訓練資料分開存放。
 # 訓練集（data/A_*_json/）是經過稽核與排除規則篩選的，
@@ -46,6 +51,8 @@ UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 VIDEOS_DIR = UPLOAD_DIR / "videos"
 JSON_DIR = UPLOAD_DIR / "json"
 RECORDS_CSV = UPLOAD_DIR / "records.csv"
+CAMERA_RECORDINGS_DIR = UPLOAD_DIR / "camera_recordings"
+ROSTER_PATH = BASE_DIR / "outputs" / "automation-roster" / "受測者名冊.xlsx"
 
 EXTRACT_SCRIPT = BASE_DIR / "extract_to_json.py"
 STATIC_DIR = BASE_DIR / "static"
@@ -59,6 +66,159 @@ CSV_HEADERS = [
 ]
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_-]")
+_NAME_NOISE = re.compile(r"[\s,，.。．·・\-_/\\]+")
+_ROSTER_HEADERS = {
+    "participant_id", "name", "name_aliases", "age",
+    "height_cm", "weight_kg", "gender", "enabled",
+}
+
+
+class NameMatchRequest(BaseModel):
+    """瀏覽器語音辨識可能回傳多個候選字串。"""
+
+    transcripts: list[str] = Field(min_length=1, max_length=5)
+
+
+class ParticipantSelection(BaseModel):
+    participant_id: str
+
+
+class AutomationFailure(BaseModel):
+    message: str = Field(min_length=1, max_length=200)
+
+
+_automation_lock = threading.Lock()
+_automation_state: Dict[str, Any] = {
+    "revision": 0,
+    "state": "idle",
+    "message": "尚未啟動",
+    "participant": None,
+    "updated_at": datetime.now().isoformat(timespec="seconds"),
+}
+
+
+def _set_automation_state(state: str, message: str,
+                          participant: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    with _automation_lock:
+        _automation_state["revision"] += 1
+        _automation_state["state"] = state
+        _automation_state["message"] = message
+        _automation_state["participant"] = participant
+        _automation_state["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        return dict(_automation_state)
+
+
+def get_automation_state() -> Dict[str, Any]:
+    with _automation_lock:
+        return dict(_automation_state)
+
+
+def normalize_spoken_name(value: str) -> str:
+    """只移除不影響姓名的空白與標點，不做可能配錯人的模糊比對。"""
+    return _NAME_NOISE.sub("", str(value or "")).casefold()
+
+
+def _xlsx_cell_value(cell: ElementTree.Element, shared: list[str],
+                     namespace: str) -> Any:
+    cell_type = cell.attrib.get("t", "")
+    if cell_type == "inlineStr":
+        inline = cell.find(f"{namespace}is")
+        return "" if inline is None else "".join(inline.itertext())
+    value_node = cell.find(f"{namespace}v")
+    if value_node is None or value_node.text is None:
+        return ""
+    raw = value_node.text
+    if cell_type == "s":
+        return shared[int(raw)]
+    if cell_type == "b":
+        return raw == "1"
+    try:
+        return float(raw) if "." in raw else int(raw)
+    except ValueError:
+        return raw
+
+
+def read_roster_rows(path: Path = ROSTER_PATH) -> list[Dict[str, Any]]:
+    """以標準函式庫讀取名冊，不要求伺服器額外安裝 Excel 套件。"""
+    if not path.exists():
+        raise FileNotFoundError(f"找不到名冊：{path}")
+
+    namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    with zipfile.ZipFile(path) as archive:
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in archive.namelist():
+            shared_root = ElementTree.fromstring(archive.read("xl/sharedStrings.xml"))
+            shared = ["".join(item.itertext()) for item in shared_root.findall(f"{namespace}si")]
+        sheet_root = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+
+    parsed_rows: list[Dict[int, Any]] = []
+    for row in sheet_root.findall(f".//{namespace}row"):
+        values: Dict[int, Any] = {}
+        for cell in row.findall(f"{namespace}c"):
+            reference = cell.attrib.get("r", "")
+            column_letters = re.match(r"[A-Z]+", reference)
+            if not column_letters:
+                continue
+            index = 0
+            for letter in column_letters.group(0):
+                index = index * 26 + ord(letter) - 64
+            values[index - 1] = _xlsx_cell_value(cell, shared, namespace)
+        parsed_rows.append(values)
+
+    if not parsed_rows:
+        return []
+    headers = {index: str(value).strip() for index, value in parsed_rows[0].items()}
+    missing = _ROSTER_HEADERS - set(headers.values())
+    if missing:
+        raise ValueError(f"名冊缺少欄位：{', '.join(sorted(missing))}")
+
+    records: list[Dict[str, Any]] = []
+    for raw_row in parsed_rows[1:]:
+        record = {header: raw_row.get(index, "") for index, header in headers.items()}
+        participant_id = str(record.get("participant_id", "")).strip()
+        name = str(record.get("name", "")).strip()
+        enabled = str(record.get("enabled", "TRUE")).strip().lower()
+        if not participant_id or not name or enabled in {"false", "0", "否", "no"}:
+            continue
+        try:
+            profile = {
+                "participant_id": participant_id,
+                "name": name,
+                "name_aliases": str(record.get("name_aliases", "")).strip(),
+                "age": int(float(record["age"])),
+                "height_cm": float(record["height_cm"]),
+                "weight_kg": float(record["weight_kg"]),
+                "gender": str(record["gender"]).strip().lower(),
+            }
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ValueError(f"受測者 {participant_id} 的基本資料格式錯誤") from exc
+        if profile["gender"] not in {"male", "female"}:
+            raise ValueError(f"受測者 {participant_id} 的 gender 必須為 male 或 female")
+        records.append(profile)
+    return records
+
+
+def public_profile(record: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: record[key] for key in (
+        "participant_id", "name", "age", "height_cm", "weight_kg", "gender"
+    )}
+
+
+def match_roster_names(records: list[Dict[str, Any]],
+                       transcripts: list[str]) -> list[Dict[str, Any]]:
+    """依姓名或名冊別名精確配對；多筆結果交由本人確認，絕不猜測。"""
+    heard = {normalize_spoken_name(text) for text in transcripts if text.strip()}
+    matches: list[Dict[str, Any]] = []
+    for record in records:
+        accepted = {normalize_spoken_name(record["name"])}
+        accepted.update(
+            normalize_spoken_name(alias)
+            for alias in re.split(r"[;；]", record.get("name_aliases", ""))
+            if alias.strip()
+        )
+        if heard & accepted:
+            matches.append(public_profile(record))
+    return matches
 
 
 def sanitize_filename_component(value: str) -> str:
@@ -153,6 +313,7 @@ def run_inference(user_id: str, age: float, height_cm: float,
 
 
 app = FastAPI(title="肌少症篩檢 API", version="2.0")
+camera = CameraHub(CAMERA_RECORDINGS_DIR)
 
 app.add_middleware(
     CORSMiddleware,
@@ -167,11 +328,123 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.on_event("startup")
 def startup_event() -> None:
     init_storage()
+    camera.start()
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    camera.stop()
 
 
 @app.get("/")
 def serve_index():
     return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+@app.get("/control")
+def serve_control():
+    """電腦端只需開啟此頁啟動／中止一輪自動檢測。"""
+    return FileResponse(str(STATIC_DIR / "control.html"))
+
+
+@app.get("/participants/status")
+def participant_roster_status() -> Dict[str, Any]:
+    try:
+        records = read_roster_rows()
+        ids = [item["participant_id"] for item in records]
+        duplicate_ids = sorted({item for item in ids if ids.count(item) > 1})
+        return {
+            "ready": bool(records) and not duplicate_ids,
+            "count": len(records),
+            "duplicate_ids": duplicate_ids,
+            "message": "名冊可使用" if records and not duplicate_ids else "名冊沒有可用資料或有重複編號",
+        }
+    except Exception as exc:
+        return {"ready": False, "count": 0, "duplicate_ids": [], "message": str(exc)}
+
+
+@app.post("/participants/match")
+def match_participant(request: NameMatchRequest) -> Dict[str, Any]:
+    try:
+        records = read_roster_rows()
+    except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
+        raise HTTPException(503, str(exc)) from exc
+    matches = match_roster_names(records, request.transcripts)
+    return {
+        "match_count": len(matches),
+        "candidates": matches,
+        "requires_confirmation": len(matches) == 1,
+    }
+
+
+@app.get("/automation/state")
+def automation_state() -> Dict[str, Any]:
+    return get_automation_state()
+
+
+@app.post("/automation/start")
+def start_automation() -> Dict[str, Any]:
+    roster = participant_roster_status()
+    if not roster["ready"]:
+        raise HTTPException(409, f"無法啟動：{roster['message']}")
+    if camera.get_frame(timeout=0.5) is None:
+        raise HTTPException(409, "無法啟動：C922 尚未產生畫面")
+    return _set_automation_state("armed", "已啟動，等待受測者完整入鏡")
+
+
+@app.post("/automation/stop")
+def stop_automation() -> Dict[str, Any]:
+    if camera.is_recording:
+        try:
+            camera.stop_recording()
+        except RuntimeError:
+            pass
+    return _set_automation_state("idle", "已由電腦端停止")
+
+
+@app.post("/automation/person-detected")
+def automation_person_detected() -> Dict[str, Any]:
+    current = get_automation_state()
+    if current["state"] != "armed":
+        return current
+    return _set_automation_state("identifying", "已偵測到受測者，正在詢問姓名")
+
+
+@app.post("/automation/profile-loaded")
+def automation_profile_loaded(selection: ParticipantSelection) -> Dict[str, Any]:
+    try:
+        records = read_roster_rows()
+    except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
+        raise HTTPException(503, str(exc)) from exc
+    record = next(
+        (item for item in records if item["participant_id"] == selection.participant_id),
+        None,
+    )
+    if record is None:
+        raise HTTPException(404, "名冊中找不到此受測者")
+    profile = public_profile(record)
+    return _set_automation_state(
+        "profile_loaded", f"已確認 {profile['name']}，準備開始動作測試", profile
+    )
+
+
+@app.post("/automation/testing")
+def automation_testing(selection: ParticipantSelection) -> Dict[str, Any]:
+    current = get_automation_state()
+    if not current.get("participant") or current["participant"]["participant_id"] != selection.participant_id:
+        raise HTTPException(409, "尚未完成受測者確認")
+    return _set_automation_state("testing", "自動動作測試進行中", current["participant"])
+
+
+@app.post("/automation/completed")
+def automation_completed(selection: ParticipantSelection) -> Dict[str, Any]:
+    current = get_automation_state()
+    return _set_automation_state("completed", "三項錄影已完成，正在分析或顯示結果", current.get("participant"))
+
+
+@app.post("/automation/failed")
+def automation_failed(failure: AutomationFailure) -> Dict[str, Any]:
+    return _set_automation_state("error", failure.message)
 
 
 @app.get("/health")
@@ -188,7 +461,74 @@ def health() -> Dict[str, Any]:
         "actions": list(ACTIONS),
         "missing_files": missing,
         "hint": "執行 python -m src.train_final 產生模型檔" if missing else "",
+        "camera": CAMERA_NAME,
+        "camera_ready": camera.get_frame(timeout=0.1) is not None,
+        "camera_recording": camera.is_recording,
+        "roster": participant_roster_status(),
+        "automation": get_automation_state(),
     }
+
+
+@app.get("/camera/frame.jpg")
+def camera_frame() -> Response:
+    """Return the latest PC-connected C922 frame for the Kebbi display."""
+    frame = camera.get_frame()
+    if frame is None:
+        raise HTTPException(503, "C922 尚未產生畫面")
+    return Response(
+        content=frame,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
+@app.get("/camera/stream")
+def camera_stream() -> StreamingResponse:
+    return StreamingResponse(
+        camera.frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
+@app.post("/camera/recordings/start")
+def start_camera_recording() -> Dict[str, Any]:
+    try:
+        recording_id = camera.start_recording()
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"status": "recording", "recording_id": recording_id}
+
+
+@app.post("/camera/recordings/stop")
+def stop_camera_recording() -> Dict[str, Any]:
+    try:
+        result = camera.stop_recording()
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    recording_id = str(result["recording_id"])
+    return {
+        "status": "ready",
+        "recording_id": recording_id,
+        "duration_seconds": result["duration_seconds"],
+        "size_bytes": result["size_bytes"],
+        "download_url": f"/camera/recordings/{recording_id}",
+    }
+
+
+@app.get("/camera/recordings/{recording_id}")
+def get_camera_recording(recording_id: str) -> FileResponse:
+    safe_id = sanitize_filename_component(recording_id)
+    if safe_id != recording_id:
+        raise HTTPException(400, "無效的錄影編號")
+    path = CAMERA_RECORDINGS_DIR / f"{safe_id}.mp4"
+    if not path.exists():
+        raise HTTPException(404, "找不到錄影檔")
+    return FileResponse(
+        str(path),
+        media_type="video/mp4",
+        filename=f"{safe_id}.mp4",
+    )
 
 
 @app.post("/upload_data/")

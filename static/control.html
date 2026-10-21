@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>肌少症自動檢測控制台</title>
+    <style>
+        :root { color-scheme: light; font-family: "Microsoft JhengHei", system-ui, sans-serif; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        main { width: min(760px, calc(100% - 32px)); margin: 48px auto; }
+        .card { background: #fff; border: 1px solid #d1d5db; border-radius: 20px; padding: 32px; box-shadow: 0 12px 28px rgba(0,0,0,.08); }
+        h1 { margin: 0 0 8px; font-size: 32px; }
+        .note { color: #4b5563; line-height: 1.7; }
+        .status { margin: 26px 0; border: 2px solid #111827; border-radius: 16px; padding: 22px; }
+        .status-label { font-size: 14px; font-weight: 700; color: #6b7280; }
+        #stateText { font-size: 30px; font-weight: 800; margin: 8px 0; }
+        #message { font-size: 19px; min-height: 28px; }
+        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        .meta div { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 10px; }
+        .actions { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+        button { border: 0; border-radius: 14px; padding: 18px; font-size: 22px; font-weight: 800; cursor: pointer; }
+        #startBtn { background: #111827; color: #fff; }
+        #stopBtn { background: #dc2626; color: #fff; }
+        button:disabled { opacity: .45; cursor: not-allowed; }
+        .error { color: #b91c1c; font-weight: 700; margin-top: 16px; min-height: 24px; }
+        a { color: #1d4ed8; }
+        @media (max-width: 600px) { .actions, .meta { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<main>
+    <section class="card">
+        <h1>肌少症自動檢測控制台</h1>
+        <p class="note">先確認凱比已開啟正式檢測頁，再按下「啟動一輪檢測」。系統會等待受測者完整入鏡，完成姓名確認後自動帶入名冊資料。</p>
+        <div class="status">
+            <div class="status-label">目前狀態</div>
+            <div id="stateText">讀取中…</div>
+            <div id="message"></div>
+            <div class="meta">
+                <div>名冊：<strong id="rosterText">檢查中…</strong></div>
+                <div>受測者：<strong id="participantText">尚未確認</strong></div>
+            </div>
+        </div>
+        <div class="actions">
+            <button id="startBtn" onclick="startAutomation()">啟動一輪檢測</button>
+            <button id="stopBtn" onclick="stopAutomation()">立即停止</button>
+        </div>
+        <div class="error" id="errorText"></div>
+        <p class="note">名冊請直接在專案的 <code>outputs/automation-roster/受測者名冊.xlsx</code> 編輯，儲存後下一次辨識即會重新讀取。</p>
+    </section>
+</main>
+<script>
+    const STATE_LABELS = {
+        idle: '待機', armed: '等待入鏡', identifying: '姓名辨識中',
+        profile_loaded: '資料已載入', testing: '動作測試中',
+        completed: '本輪完成', error: '需要協助'
+    };
+
+    async function api(path, options = {}) {
+        const response = await fetch(path, options);
+        if (!response.ok) {
+            let detail = `HTTP ${response.status}`;
+            try { detail = (await response.json()).detail || detail; } catch (_) {}
+            throw new Error(detail);
+        }
+        return response.json();
+    }
+
+    async function refresh() {
+        try {
+            const [state, roster] = await Promise.all([
+                api('/automation/state'), api('/participants/status')
+            ]);
+            document.getElementById('stateText').textContent = STATE_LABELS[state.state] || state.state;
+            document.getElementById('message').textContent = state.message || '';
+            document.getElementById('rosterText').textContent = roster.ready
+                ? `可使用（${roster.count} 人）` : `無法使用：${roster.message}`;
+            document.getElementById('participantText').textContent = state.participant
+                ? `${state.participant.name}（${state.participant.participant_id}）` : '尚未確認';
+            document.getElementById('startBtn').disabled = !roster.ready || ['armed','identifying','testing'].includes(state.state);
+            document.getElementById('errorText').textContent = '';
+        } catch (error) {
+            document.getElementById('errorText').textContent = error.message;
+        }
+    }
+
+    async function startAutomation() {
+        document.getElementById('startBtn').disabled = true;
+        try { await api('/automation/start', { method: 'POST' }); }
+        catch (error) { document.getElementById('errorText').textContent = error.message; }
+        await refresh();
+    }
+
+    async function stopAutomation() {
+        try { await api('/automation/stop', { method: 'POST' }); }
+        catch (error) { document.getElementById('errorText').textContent = error.message; }
+        await refresh();
+    }
+
+    refresh();
+    setInterval(refresh, 1000);
+</script>
+</body>
+</html>

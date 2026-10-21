@@ -130,11 +130,33 @@ python -m uvicorn api_server:app --port 8000
 | 端點 | 用途 |
 |---|---|
 | `GET /` | 前端網頁 |
+| `GET /control` | 電腦端自動檢測啟動／停止控制台 |
 | `GET /health` | 健康檢查（確認模型檔是否就緒） |
+| `GET /participants/status` | 檢查 Excel 受測者名冊 |
+| `POST /participants/match` | 以語音候選文字精確比對姓名或別名 |
+| `GET /automation/state` | 讀取目前自動檢測狀態 |
 | `POST /upload_data/` | 上傳影片 → 擷取骨架 → 評估風險 |
 | `GET /result/{user_id}` | 以現有骨架重新評估，不需重新上傳 |
 | `POST /label/` | 治療師標記診斷結果 |
 | `GET /docs` | FastAPI 自動產生的 API 文件 |
+
+---
+
+## 電腦啟動的自動檢測流程
+
+1. 編輯 `outputs/automation-roster/受測者名冊.xlsx`。每列一位受測者；`name_aliases` 以分號分隔可能的語音辨識寫法，`enabled` 設為 `TRUE` 才會使用。
+2. 電腦開啟 `http://localhost:8000/control`，凱比維持 `http://127.0.0.1:8000/`。
+3. 電腦按下「啟動一輪檢測」。凱比端需連續 2.5 秒偵測到肩膀、髖部與膝蓋完整入鏡，才進入姓名確認。
+4. 姓名只接受名冊內姓名或別名的精確配對，且須再回答「是」確認本人，之後才自動帶入編號、年齡、身高、體重與性別。
+5. 系統依序語音引導起立坐下、行走與半蹲，沿用即時計次／停止條件，完成後自動上傳分析。
+
+狀態區分：
+
+- **已完成程式整合**：電腦控制狀態、C922 入鏡判斷、Excel 名冊讀取、姓名／別名精確比對、本人確認邏輯、資料自動填入、三項錄影流程串接。
+- **目前相容性限制**：凱比目前使用的 Gecko 瀏覽器未提供 Web Speech API 時，畫面會顯示姓名輸入備援；要達到真正無人化，仍需在 Android App 接入可用的離線語音辨識或 NUWA 語音 SDK，再呼叫同一組名冊 API。
+- **仍待實機驗證**：語音辨識率、多人／同音姓名、環境噪音、慢動作、未完全站起、骨架中斷，以及三項測試連續運作穩定度。
+
+名冊內的 `P001`、`P002` 是流程測試用虛構資料，正式收案前必須替換；名冊含個人資料，repository 應維持 private。
 
 ---
 
@@ -143,7 +165,10 @@ python -m uvicorn api_server:app --port 8000
 ```
 api_server.py               FastAPI 伺服器（上傳、評估、標記）
 extract_to_json.py          影片 → MediaPipe 骨架 JSON
-static/index.html           前端網頁
+static/index.html           凱比端前端網頁
+static/control.html         電腦端自動檢測控制台
+webcam_capture.py           電腦端 C922 預覽與錄影
+outputs/automation-roster/受測者名冊.xlsx  自動填入用名冊範本
 pose_landmarker_heavy.task  MediaPipe 模型檔
 
 src/
@@ -200,7 +225,7 @@ _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN �
   ✅ 訓練名冊（31 人 / 92 樣本）
   ✅ 骨架前處理（座標軸修正、正規化、bone stream）
   ✅ 交叉驗證切分（按人分組，避免資料洩漏）
-  ✅ 單元測試（154 個）
+  ✅ 單元測試（158 個）
 
 【模型】
   ✅ 系統 A：手工特徵 + LogReg / RandomForest
@@ -210,6 +235,9 @@ _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN �
 
 【產品】
   ✅ 前端網頁 + FastAPI 伺服器 + 影片轉骨架
+  ✅ 電腦端 C922 預覽／錄影 + 自動檢測控制狀態
+  ✅ Excel 名冊精確比對與基本資料自動填入
+  ⚠️ 凱比 Gecko 瀏覽器的語音辨識仍需 Android／NUWA 方案
   ✅ 推論模組與 API 契約
   ✅ 資料健檢報告（回饋收案端）
 ```
