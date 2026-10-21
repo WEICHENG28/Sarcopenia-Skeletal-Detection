@@ -8,7 +8,7 @@ from api_server import (
 
 SAMPLE = [
     {
-        "participant_id": "P001",
+        "participant_id": "SB01",
         "name": "王小明",
         "name_aliases": "王曉明;小明",
         "age": 75,
@@ -17,7 +17,7 @@ SAMPLE = [
         "gender": "male",
     },
     {
-        "participant_id": "P002",
+        "participant_id": "SB02",
         "name": "李美玲",
         "name_aliases": "美玲",
         "age": 72,
@@ -35,8 +35,8 @@ def test_normalize_spoken_name_only_removes_safe_noise():
 def test_exact_name_and_alias_match():
     direct = match_roster_names(SAMPLE, ["王小明"])
     alias = match_roster_names(SAMPLE, ["王曉明"])
-    assert direct[0]["participant_id"] == "P001"
-    assert alias[0]["participant_id"] == "P001"
+    assert direct[0]["participant_id"] == "SB01"
+    assert alias[0]["participant_id"] == "SB01"
 
 
 def test_similar_but_not_registered_name_does_not_match():
@@ -46,4 +46,4 @@ def test_similar_but_not_registered_name_does_not_match():
 def test_generated_roster_is_readable():
     assert ROSTER_PATH.exists()
     records = read_roster_rows()
-    assert [record["participant_id"] for record in records] == ["P001", "P002"]
+    assert [record["participant_id"] for record in records] == ["SB01", "SB02"]
