@@ -400,6 +400,8 @@
         let automationSequenceActive = false;
         let automationActionIndex = -1;
         let automationRunToken = 0;
+        let activePromptAudio = null;
+        let screenWakeLock = null;
 
         // ── 動作對應後端 action 名稱 ──────────────────────────────
         const ACTION_MAP = { sit: "Sit", walk: "Walk", squat: "Squat" };
@@ -418,9 +420,30 @@
             webcam.onerror = () => setTimeout(loadNextFrame, 500);
             loadNextFrame();
             initPoseTracking();
+            ensureScreenWakeLock();
             pollAutomationState();
             setInterval(pollAutomationState, 1000);
         };
+
+        async function ensureScreenWakeLock() {
+            if (!('wakeLock' in navigator) || document.visibilityState !== 'visible'
+                || screenWakeLock) return;
+            try {
+                screenWakeLock = await navigator.wakeLock.request('screen');
+                screenWakeLock.addEventListener('release', () => {
+                    screenWakeLock = null;
+                });
+            } catch (error) {
+                console.warn('無法取得螢幕喚醒鎖：', error);
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                ensureScreenWakeLock();
+                pollAutomationState();
+            }
+        });
 
         // ── 字體控制 ──────────────────────────────────────────────
         function updateFontSize(size, btnElement) {
@@ -1012,8 +1035,29 @@
         const AUTOMATED_ACTIONS = [
             { id: 'sit', prompt: '第一項是五次起立坐下。請坐在穩固且沒有輪子的椅子上，雙手交叉於胸前。聽到開始後，連續完成五次。' },
             { id: 'walk', prompt: '第二項是行走測試。請站在起點，聽到開始後向前行走，完成後停下。' },
-            { id: 'squat', prompt: '第三項是半蹲測試。請站穩，聽到開始後完成五次半蹲；若感到不適，請立即停止。' },
+            { id: 'squat', prompt: '第三項是半蹲測試。請站穩，聽到開始後完成五次半蹲。若感到不適，請立即停止。' },
         ];
+        const TTS_TIMEOUT_MIN_MS = 2500;
+        const TTS_TIMEOUT_MAX_MS = 18000;
+        const RECORDED_PROMPTS = Object.freeze({
+            '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
+            '您好，基本資料已載入。接下來將依序進行三項動作測試。': '/static/tts/profile_loaded.mp3',
+            [AUTOMATED_ACTIONS[0].prompt]: '/static/tts/sit_prompt.mp3',
+            [AUTOMATED_ACTIONS[1].prompt]: '/static/tts/walk_prompt.mp3',
+            [AUTOMATED_ACTIONS[2].prompt]: '/static/tts/squat_prompt.mp3',
+            '1': '/static/tts/count_1.mp3',
+            '2': '/static/tts/count_2.mp3',
+            '3': '/static/tts/count_3.mp3',
+            '4': '/static/tts/count_4.mp3',
+            '5': '/static/tts/count_5.mp3',
+            '開始': '/static/tts/start.mp3',
+            '請完整入鏡': '/static/tts/enter_frame.mp3',
+            '撐住': '/static/tts/hold.mp3',
+            '很好': '/static/tts/good.mp3',
+            '已完成5下，錄影即將結束': '/static/tts/complete_5.mp3',
+            '偵測到動作已停止，錄影即將結束': '/static/tts/movement_stopped.mp3',
+            '三項動作已完成，正在進行分析，請稍候。': '/static/tts/analysis.mp3',
+        });
 
         async function requestJson(path, options = {}) {
             const response = await fetch(`${API_BASE}${path}`, options);
@@ -1057,6 +1101,7 @@
             automationSequenceActive = false;
             identityFlowRunning = false;
             automationPresenceSince = null;
+            stopPromptPlayback();
             clearInterval(timerInterval);
             if (activeActionId) {
                 const button = document.getElementById(BTN_ID_MAP[activeActionId]);
@@ -1087,6 +1132,13 @@
                 } else if (state.state === 'identifying' && !identityFlowRunning) {
                     identityFlowRunning = true;
                     startIdentityConversation();
+                } else if (state.state === 'profile_loaded' && state.participant
+                           && !identityFlowRunning && !automationSequenceActive
+                           && !currentRecordingActionId) {
+                    // Gecko 可能在 TTS 播放期間被重新整理；從伺服器保存的受測者資料安全續跑。
+                    loadParticipantIntoForm(state.participant);
+                    identityFlowRunning = false;
+                    beginAutomatedTests(state.participant);
                 }
             } catch (error) {
                 document.getElementById('automationMessage').textContent = `控制連線失敗：${error.message}`;
@@ -1119,19 +1171,101 @@
                 });
         }
 
-        function speakAsync(text) {
+        function estimateTtsTimeoutMs(text) {
+            return Math.min(
+                TTS_TIMEOUT_MAX_MS,
+                Math.max(TTS_TIMEOUT_MIN_MS, 1200 + String(text).length * 180)
+            );
+        }
+
+        function stopPromptPlayback() {
+            if (activePromptAudio) {
+                try {
+                    activePromptAudio.pause();
+                    activePromptAudio.currentTime = 0;
+                } catch (_) {}
+                activePromptAudio = null;
+            }
+            if ('speechSynthesis' in window) {
+                try { window.speechSynthesis.cancel(); } catch (_) {}
+            }
+        }
+
+        function speakAsync(text, { minimumMs = 0, timeoutMs = estimateTtsTimeoutMs(text) } = {}) {
             return new Promise(resolve => {
-                if (!speechEnabled || !('speechSynthesis' in window)) {
-                    resolve();
+                const startedAt = Date.now();
+                let settled = false;
+                let timeoutHandle = null;
+                let promptAudio = null;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+                    if (activePromptAudio === promptAudio) activePromptAudio = null;
+                    const remaining = Math.max(0, minimumMs - (Date.now() - startedAt));
+                    setTimeout(resolve, remaining);
+                };
+
+                if (!speechEnabled) {
+                    setTimeout(resolve, minimumMs);
                     return;
                 }
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'zh-TW';
-                utterance.rate = 0.95;
-                utterance.onend = resolve;
-                utterance.onerror = resolve;
-                window.speechSynthesis.speak(utterance);
+
+                stopPromptPlayback();
+                timeoutHandle = setTimeout(() => {
+                    console.warn(`語音播放逾時，流程自動繼續：${text}`);
+                    stopPromptPlayback();
+                    finish();
+                }, timeoutMs);
+
+                const useBrowserTtsFallback = () => {
+                    if (settled) return;
+                    if (!('speechSynthesis' in window)
+                        || typeof SpeechSynthesisUtterance === 'undefined') {
+                        finish();
+                        return;
+                    }
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'zh-TW';
+                    utterance.rate = 0.95;
+                    utterance.onend = finish;
+                    utterance.onerror = finish;
+                    try {
+                        window.speechSynthesis.speak(utterance);
+                    } catch (error) {
+                        console.warn('瀏覽器語音播放失敗，流程自動繼續：', error);
+                        finish();
+                    }
+                };
+
+                const recordedUrl = RECORDED_PROMPTS[text];
+                if (!recordedUrl || typeof Audio === 'undefined') {
+                    useBrowserTtsFallback();
+                    return;
+                }
+
+                promptAudio = new Audio(recordedUrl);
+                activePromptAudio = promptAudio;
+                promptAudio.preload = 'auto';
+                promptAudio.onended = finish;
+                promptAudio.onerror = () => {
+                    if (activePromptAudio === promptAudio) activePromptAudio = null;
+                    console.warn(`提示音檔播放失敗，改用瀏覽器 TTS：${recordedUrl}`);
+                    useBrowserTtsFallback();
+                };
+                try {
+                    const playResult = promptAudio.play();
+                    if (playResult && typeof playResult.catch === 'function') {
+                        playResult.catch(error => {
+                            if (activePromptAudio === promptAudio) activePromptAudio = null;
+                            console.warn('提示音檔遭瀏覽器阻擋，改用瀏覽器 TTS：', error);
+                            useBrowserTtsFallback();
+                        });
+                    }
+                } catch (error) {
+                    console.warn('提示音檔無法啟動，改用瀏覽器 TTS：', error);
+                    useBrowserTtsFallback();
+                }
             });
         }
 
@@ -1188,6 +1322,7 @@
                 document.getElementById('manualNameFallback').style.display = 'flex';
                 const message = '凱比目前的瀏覽器不支援網頁語音辨識，請先以姓名輸入測試名冊流程；正式無人化需接 Android／NUWA 語音辨識。';
                 document.getElementById('automationMessage').textContent = message;
+                await speakAsync('您好，請在畫面輸入您的姓名，完成後按確認姓名。', { minimumMs: 3000 });
                 await reportAutomationFailure(message, false);
                 return;
             }
@@ -1231,13 +1366,17 @@
             }
         }
 
-        async function confirmParticipant(profile) {
+        function loadParticipantIntoForm(profile) {
             document.getElementById('subjectId').value = profile.participant_id;
             document.getElementById('age').value = profile.age;
             document.getElementById('height').value = profile.height_cm;
             document.getElementById('weight').value = profile.weight_kg;
             document.getElementById('gender').value = profile.gender;
             document.getElementById('manualNameFallback').style.display = 'none';
+        }
+
+        async function confirmParticipant(profile) {
+            loadParticipantIntoForm(profile);
 
             const state = await requestJson('/automation/profile-loaded', {
                 method: 'POST',
@@ -1246,10 +1385,13 @@
             });
             automationServerState = state;
             updateAutomationPanel(state);
-            identityFlowRunning = false;
             setBanner(`✅ 已確認：${profile.name}`, 'ok');
-            await speakAsync(`${profile.name}您好，基本資料已載入。接下來將依序進行三項動作測試。`);
-            beginAutomatedTests(profile);
+            await speakAsync(
+                '您好，基本資料已載入。接下來將依序進行三項動作測試。',
+                { minimumMs: 2500 }
+            );
+            identityFlowRunning = false;
+            await beginAutomatedTests(profile);
         }
 
         async function reportAutomationFailure(message, changePanel = true) {
@@ -1266,6 +1408,7 @@
         }
 
         async function beginAutomatedTests(profile) {
+            if (automationSequenceActive) return;
             automationSequenceActive = true;
             automationActionIndex = -1;
             const token = ++automationRunToken;
@@ -1292,7 +1435,7 @@
             if (automationActionIndex >= AUTOMATED_ACTIONS.length) {
                 automationSequenceActive = false;
                 setBanner('✅ 三項錄影完成，開始上傳分析', 'ok');
-                await speakAsync('三項動作已完成，正在進行分析，請稍候。');
+                await speakAsync('三項動作已完成，正在進行分析，請稍候。', { minimumMs: 1800 });
                 await requestJson('/automation/completed', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1304,14 +1447,14 @@
 
             const step = AUTOMATED_ACTIONS[automationActionIndex];
             setBanner(`下一項：${ACTION_LABEL[step.id]}`, 'info');
-            await speakAsync(step.prompt);
+            await speakAsync(step.prompt, { minimumMs: 5000 });
             for (let count = 3; count >= 1; count--) {
                 if (!automationSequenceActive || token !== automationRunToken) return;
                 setBanner(`${ACTION_LABEL[step.id]}：${count}`, 'info');
-                await speakAsync(String(count));
+                await speakAsync(String(count), { minimumMs: 1000, timeoutMs: 2200 });
             }
             if (!automationSequenceActive || token !== automationRunToken) return;
-            await speakAsync('開始');
+            await speakAsync('開始', { minimumMs: 800, timeoutMs: 2200 });
             await toggleRecording(step.id, BTN_ID_MAP[step.id], ACTION_LABEL[step.id]);
             if (!isRecording) {
                 automationSequenceActive = false;
@@ -1323,7 +1466,7 @@
             speechEnabled = !speechEnabled;
             button.classList.toggle('active', speechEnabled);
             button.textContent = speechEnabled ? '🔊 語音提示：開' : '🔇 語音提示：關';
-            if (!speechEnabled && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+            if (!speechEnabled) stopPromptPlayback();
         }
 
         function speak(text) {
@@ -1331,11 +1474,7 @@
             const now = Date.now();
             if (live.lastSpokenAt[text] && now - live.lastSpokenAt[text] < 2500) return;
             live.lastSpokenAt[text] = now;
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'zh-TW';
-            utterance.rate = 1.0;
-            window.speechSynthesis.speak(utterance);
+            void speakAsync(text);
         }
     </script>
 </body>

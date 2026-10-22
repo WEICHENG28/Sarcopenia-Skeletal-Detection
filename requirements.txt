@@ -12,6 +12,9 @@ uvicorn[standard]>=0.27
 python-multipart>=0.0.9
 aiofiles>=23.0
 
+# 只在更新 static/tts 預錄提示音時使用；實際檢測不需連網
+edge-tts>=7.3,<8.0
+
 # 影片轉骨架（extract_to_json.py）
 opencv-python>=4.9
 
