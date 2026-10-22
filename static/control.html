@@ -16,14 +16,16 @@
         .status-label { font-size: 14px; font-weight: 700; color: #6b7280; }
         #stateText { font-size: 30px; font-weight: 800; margin: 8px 0; }
         #message { font-size: 19px; min-height: 28px; }
-        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
         .meta div { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 10px; }
-        .actions { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+        .actions { display: grid; grid-template-columns: 2fr 1.35fr 1fr; gap: 14px; }
         button { border: 0; border-radius: 14px; padding: 18px; font-size: 22px; font-weight: 800; cursor: pointer; }
         #startBtn { background: #111827; color: #fff; }
+        #testSpeechBtn { background: #1d4ed8; color: #fff; font-size: 18px; }
         #stopBtn { background: #dc2626; color: #fff; }
         button:disabled { opacity: .45; cursor: not-allowed; }
         .error { color: #b91c1c; font-weight: 700; margin-top: 16px; min-height: 24px; }
+        #speechResult { color: #1e3a8a; font-weight: 700; margin-top: 16px; min-height: 24px; }
         a { color: #1d4ed8; }
         @media (max-width: 600px) { .actions, .meta { grid-template-columns: 1fr; } }
     </style>
@@ -40,12 +42,15 @@
             <div class="meta">
                 <div>名冊：<strong id="rosterText">檢查中…</strong></div>
                 <div>受測者：<strong id="participantText">尚未確認</strong></div>
+                <div>語音辨識：<strong id="speechText">檢查中…</strong></div>
             </div>
         </div>
         <div class="actions">
             <button id="startBtn" onclick="startAutomation()">啟動一輪檢測</button>
+            <button id="testSpeechBtn" onclick="testSpeech()">測試姓名語音</button>
             <button id="stopBtn" onclick="stopAutomation()">立即停止</button>
         </div>
+        <div id="speechResult"></div>
         <div class="error" id="errorText"></div>
         <p class="note">名冊請直接在專案的 <code>outputs/automation-roster/受測者名冊.xlsx</code> 編輯，儲存後下一次辨識即會重新讀取。</p>
     </section>
@@ -56,6 +61,7 @@
         profile_loaded: '資料已載入', testing: '動作測試中',
         completed: '本輪完成', error: '需要協助'
     };
+    let speechTestRunning = false;
 
     async function api(path, options = {}) {
         const response = await fetch(path, options);
@@ -69,8 +75,8 @@
 
     async function refresh() {
         try {
-            const [state, roster] = await Promise.all([
-                api('/automation/state'), api('/participants/status')
+            const [state, roster, speech] = await Promise.all([
+                api('/automation/state'), api('/participants/status'), api('/speech/status')
             ]);
             document.getElementById('stateText').textContent = STATE_LABELS[state.state] || state.state;
             document.getElementById('message').textContent = state.message || '';
@@ -78,7 +84,12 @@
                 ? `可使用（${roster.count} 人）` : `無法使用：${roster.message}`;
             document.getElementById('participantText').textContent = state.participant
                 ? `${state.participant.name}（${state.participant.participant_id}）` : '尚未確認';
-            document.getElementById('startBtn').disabled = !roster.ready || ['armed','identifying','testing'].includes(state.state);
+            document.getElementById('speechText').textContent = speech.available
+                ? `可使用（${speech.model}${speech.model_loaded ? '／已載入' : '／待載入'}）`
+                : speech.message;
+            const busy = ['armed','identifying','testing'].includes(state.state);
+            document.getElementById('startBtn').disabled = !roster.ready || busy;
+            document.getElementById('testSpeechBtn').disabled = !speech.available || busy || speechTestRunning;
             document.getElementById('errorText').textContent = '';
         } catch (error) {
             document.getElementById('errorText').textContent = error.message;
@@ -96,6 +107,38 @@
         try { await api('/automation/stop', { method: 'POST' }); }
         catch (error) { document.getElementById('errorText').textContent = error.message; }
         await refresh();
+    }
+
+    async function testSpeech() {
+        speechTestRunning = true;
+        let failureMessage = '';
+        document.getElementById('testSpeechBtn').disabled = true;
+        document.getElementById('speechResult').textContent = '🎤 正在收音 4.5 秒，請現在清楚說出姓名…';
+        document.getElementById('errorText').textContent = '';
+        try {
+            const recognized = await api('/speech/listen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ purpose: 'name', duration_seconds: 4.5 })
+            });
+            const matched = await api('/participants/match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transcripts: recognized.transcripts })
+            });
+            const heard = recognized.transcripts.join('／');
+            const matchText = matched.match_count === 1
+                ? `符合 ${matched.candidates[0].name}（${matched.candidates[0].participant_id}）`
+                : matched.match_count > 1 ? '符合多人，需說完整姓名' : '未對上名冊';
+            document.getElementById('speechResult').textContent = `辨識結果：${heard}；${matchText}`;
+        } catch (error) {
+            document.getElementById('speechResult').textContent = '';
+            failureMessage = `語音測試失敗：${error.message}`;
+        } finally {
+            speechTestRunning = false;
+            await refresh();
+            if (failureMessage) document.getElementById('errorText').textContent = failureMessage;
+        }
     }
 
     refresh();

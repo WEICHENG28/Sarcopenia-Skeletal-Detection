@@ -32,6 +32,7 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
     source = INDEX_PATH.read_text(encoding="utf-8")
     expected = {
         "manual_name.mp3",
+        "ask_name.mp3",
         "profile_loaded.mp3",
         "sit_prompt.mp3",
         "walk_prompt.mp3",
@@ -53,3 +54,11 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
     assert all((TTS_PATH / filename).stat().st_size > 1_000 for filename in expected)
     assert "RECORDED_PROMPTS" in source
     assert "提示音檔播放失敗，改用瀏覽器 TTS" in source
+
+
+def test_gecko_falls_back_to_pc_side_offline_speech_recognition():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "recognizeWithServer" in source
+    assert "'/speech/listen'" in source
+    assert "purpose === 'confirmation' ? 3.5 : 4.5" in source
+    assert "已自動改用電腦端 C922 麥克風與離線模型" in source

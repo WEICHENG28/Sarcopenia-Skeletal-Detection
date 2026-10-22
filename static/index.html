@@ -1041,6 +1041,7 @@
         const TTS_TIMEOUT_MAX_MS = 18000;
         const RECORDED_PROMPTS = Object.freeze({
             '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
+            '您好，請清楚說出您的姓名。': '/static/tts/ask_name.mp3',
             '您好，基本資料已載入。接下來將依序進行三項動作測試。': '/static/tts/profile_loaded.mp3',
             [AUTOMATED_ACTIONS[0].prompt]: '/static/tts/sit_prompt.mp3',
             [AUTOMATED_ACTIONS[1].prompt]: '/static/tts/walk_prompt.mp3',
@@ -1269,10 +1270,26 @@
             });
         }
 
-        async function recognizeOnce(promptText) {
-            if (!SpeechRecognitionCtor) throw new Error('此瀏覽器不支援語音辨識');
+        async function recognizeWithServer(purpose) {
+            setBanner('🎤 電腦正在透過 C922 麥克風收音，請清楚說話', 'info');
+            const result = await requestJson('/speech/listen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    purpose,
+                    duration_seconds: purpose === 'confirmation' ? 3.5 : 4.5
+                })
+            });
+            if (!Array.isArray(result.transcripts) || result.transcripts.length === 0) {
+                throw new Error('沒有辨識到清楚語音');
+            }
+            return result.transcripts;
+        }
+
+        async function recognizeOnce(promptText, purpose = 'name') {
             await speakAsync(promptText);
             await new Promise(resolve => setTimeout(resolve, 350));
+            if (!SpeechRecognitionCtor) return recognizeWithServer(purpose);
             return new Promise((resolve, reject) => {
                 const recognition = new SpeechRecognitionCtor();
                 recognition.lang = 'zh-TW';
@@ -1313,23 +1330,19 @@
         }
 
         function isYes(transcripts) {
-            return transcripts.some(text => /^(是|對|正確|沒錯|好|可以|本人)$/.test(text.replace(/[\s，。,.]/g, '')));
+            return transcripts.some(text => /^(是|是的|對|對的|正確|沒錯|好|可以|本人|我是|yes|yeah|yep)$/i.test(text.replace(/[\s，。,.！!]/g, '')));
         }
 
         async function startIdentityConversation() {
             setBanner('🎤 請在提示後清楚說出姓名', 'info');
             if (!SpeechRecognitionCtor) {
-                document.getElementById('manualNameFallback').style.display = 'flex';
-                const message = '凱比目前的瀏覽器不支援網頁語音辨識，請先以姓名輸入測試名冊流程；正式無人化需接 Android／NUWA 語音辨識。';
-                document.getElementById('automationMessage').textContent = message;
-                await speakAsync('您好，請在畫面輸入您的姓名，完成後按確認姓名。', { minimumMs: 3000 });
-                await reportAutomationFailure(message, false);
-                return;
+                document.getElementById('automationMessage').textContent =
+                    '凱比瀏覽器不支援語音辨識，已自動改用電腦端 C922 麥克風與離線模型。';
             }
 
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
-                    const names = await recognizeOnce('您好，請清楚說出您的姓名。');
+                    const names = await recognizeOnce('您好，請清楚說出您的姓名。', 'name');
                     const result = await findParticipant(names);
                     if (result.match_count !== 1) {
                         await speakAsync(result.match_count > 1
@@ -1338,7 +1351,11 @@
                         continue;
                     }
                     const candidate = result.candidates[0];
-                    const answer = await recognizeOnce(`請問您是${candidate.name}嗎？請回答是或不是。`);
+                    setBanner(`我辨識到「${candidate.name}」，請回答是或不是`, 'info');
+                    const answer = await recognizeOnce(
+                        `請問您是${candidate.name}嗎？請回答是或不是。`,
+                        'confirmation'
+                    );
                     if (!isYes(answer)) {
                         await speakAsync('好的，我們重新確認姓名。');
                         continue;
@@ -1352,6 +1369,10 @@
             }
             identityFlowRunning = false;
             document.getElementById('manualNameFallback').style.display = 'flex';
+            await speakAsync(
+                '您好，請在畫面輸入您的姓名，完成後按確認姓名。',
+                { minimumMs: 3000 }
+            );
         }
 
         async function submitManualName() {

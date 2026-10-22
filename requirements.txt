@@ -12,6 +12,9 @@ uvicorn[standard]>=0.27
 python-multipart>=0.0.9
 aiofiles>=23.0
 
+# C922 麥克風的電腦端離線語音辨識（首次使用需下載 small 模型）
+faster-whisper>=1.2,<2.0
+
 # 只在更新 static/tts 預錄提示音時使用；實際檢測不需連網
 edge-tts>=7.3,<8.0
 

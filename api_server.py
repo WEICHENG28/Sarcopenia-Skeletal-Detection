@@ -25,7 +25,7 @@ import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 from xml.etree import ElementTree
 
 import pandas as pd
@@ -41,7 +41,8 @@ if str(BASE_DIR) not in sys.path:
 
 from src.dataset_manifest import ACTIONS
 from src.predict import predict
-from webcam_capture import CAMERA_NAME, CameraHub
+from speech_recognition_service import OfflineSpeechRecognizer, SpeechRecognitionError
+from webcam_capture import CAMERA_NAME, CameraHub, find_ffmpeg
 
 # 上傳資料與訓練資料分開存放。
 # 訓練集（data/A_*_json/）是經過稽核與排除規則篩選的，
@@ -77,6 +78,13 @@ class NameMatchRequest(BaseModel):
     """瀏覽器語音辨識可能回傳多個候選字串。"""
 
     transcripts: list[str] = Field(min_length=1, max_length=5)
+
+
+class SpeechListenRequest(BaseModel):
+    """Request one short utterance from the PC-connected C922 microphone."""
+
+    purpose: Literal["name", "confirmation"] = "name"
+    duration_seconds: float = Field(default=4.5, ge=2.0, le=8.0)
 
 
 class ParticipantSelection(BaseModel):
@@ -314,6 +322,7 @@ def run_inference(user_id: str, age: float, height_cm: float,
 
 app = FastAPI(title="肌少症篩檢 API", version="2.0")
 camera = CameraHub(CAMERA_RECORDINGS_DIR)
+speech_recognizer = OfflineSpeechRecognizer(find_ffmpeg())
 
 app.add_middleware(
     CORSMiddleware,
@@ -375,6 +384,40 @@ def match_participant(request: NameMatchRequest) -> Dict[str, Any]:
         "candidates": matches,
         "requires_confirmation": len(matches) == 1,
     }
+
+
+@app.get("/speech/status")
+def speech_status() -> Dict[str, Any]:
+    """Report local ASR availability without loading the large model."""
+    return speech_recognizer.status()
+
+
+@app.post("/speech/listen")
+def listen_for_speech(request: SpeechListenRequest) -> Dict[str, Any]:
+    """Capture a short C922 utterance and transcribe it locally."""
+    try:
+        records = read_roster_rows()
+    except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    roster_hints: list[str] = []
+    if request.purpose == "name":
+        for record in records:
+            roster_hints.append(record["name"])
+            roster_hints.extend(
+                alias.strip()
+                for alias in re.split(r"[;；]", record.get("name_aliases", ""))
+                if alias.strip()
+            )
+    try:
+        result = speech_recognizer.listen(
+            purpose=request.purpose,
+            roster_hints=roster_hints,
+            duration_seconds=request.duration_seconds,
+        )
+    except SpeechRecognitionError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return {"status": "recognized", **result}
 
 
 @app.get("/automation/state")
@@ -464,6 +507,7 @@ def health() -> Dict[str, Any]:
         "camera": CAMERA_NAME,
         "camera_ready": camera.get_frame(timeout=0.1) is not None,
         "camera_recording": camera.is_recording,
+        "speech": speech_recognizer.status(),
         "roster": participant_roster_status(),
         "automation": get_automation_state(),
     }

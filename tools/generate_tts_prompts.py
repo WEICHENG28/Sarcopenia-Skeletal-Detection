@@ -12,6 +12,7 @@ OUTPUT_DIR = Path(__file__).resolve().parents[1] / "static" / "tts"
 VOICE = "zh-TW-HsiaoChenNeural"
 PROMPTS = {
     "manual_name.mp3": "您好，請在畫面輸入您的姓名，完成後按確認姓名。",
+    "ask_name.mp3": "您好，請清楚說出您的姓名。",
     "profile_loaded.mp3": "您好，基本資料已載入。接下來將依序進行三項動作測試。",
     "sit_prompt.mp3": "第一項是五次起立坐下。請坐在穩固且沒有輪子的椅子上，雙手交叉於胸前。聽到開始後，連續完成五次。",
     "walk_prompt.mp3": "第二項是行走測試。請站在起點，聽到開始後向前行走，完成後停下。",
