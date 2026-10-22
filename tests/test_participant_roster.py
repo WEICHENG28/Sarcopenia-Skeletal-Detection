@@ -39,6 +39,11 @@ def test_exact_name_and_alias_match():
     assert alias[0]["participant_id"] == "SB01"
 
 
+def test_name_can_be_extracted_from_a_natural_spoken_sentence():
+    matches = match_roster_names(SAMPLE, ["您好，我的名字是王小明。"])
+    assert [item["participant_id"] for item in matches] == ["SB01"]
+
+
 def test_similar_but_not_registered_name_does_not_match():
     assert match_roster_names(SAMPLE, ["王大明"]) == []
 

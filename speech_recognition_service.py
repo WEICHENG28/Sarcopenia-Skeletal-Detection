@@ -9,15 +9,24 @@ is always removed after transcription.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 import threading
+import wave
 from pathlib import Path
 from typing import Any, Callable
+
+import numpy as np
 
 
 MICROPHONE_NAME = os.getenv("WEBCAM_MIC_NAME", "麥克風 (C922 Pro Stream Webcam)")
 WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL", "small")
+_ROBOT_NAME_PROMPTS = (
+    "請完整",
+    "請完整入鏡",
+    "您好請清楚說出您的姓名",
+)
 
 
 class SpeechRecognitionError(RuntimeError):
@@ -135,6 +144,42 @@ class OfflineSpeechRecognizer:
                 detail = "C922 麥克風正被其他程式使用"
             raise SpeechRecognitionError(detail or "C922 麥克風沒有收到有效音訊")
 
+    @staticmethod
+    def _read_pcm_wav(audio_path: Path) -> np.ndarray:
+        """Load the known FFmpeg PCM output without relying on PyAV.
+
+        faster-whisper 1.2.1 passes ``metadata_errors`` to ``av.open`` while
+        PyAV 19 removed that argument.  The capture format is already fixed to
+        mono 16 kHz signed 16-bit PCM, so the standard-library WAV reader is
+        both sufficient and insulated from that dependency mismatch.
+        """
+        try:
+            with wave.open(str(audio_path), "rb") as source:
+                channels = source.getnchannels()
+                sample_width = source.getsampwidth()
+                sample_rate = source.getframerate()
+                frames = source.readframes(source.getnframes())
+        except (OSError, EOFError, wave.Error) as exc:
+            raise SpeechRecognitionError(f"C922 錄音檔無法讀取：{exc}") from exc
+
+        if (channels, sample_width, sample_rate) != (1, 2, 16000):
+            raise SpeechRecognitionError(
+                "C922 錄音格式不符，預期為單聲道、16 kHz、16-bit PCM"
+            )
+        if not frames:
+            raise SpeechRecognitionError("C922 麥克風沒有收到有效音訊")
+        return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+
+    @staticmethod
+    def _is_robot_name_prompt(text: str) -> bool:
+        """Recognize short echoes of Kebbi's own prompts, not user names."""
+        normalized = re.sub(r"[^0-9a-z\u3400-\u9fff]+", "", text.casefold())
+        return any(
+            normalized == prompt
+            or (3 <= len(normalized) <= len(prompt) and normalized in prompt)
+            for prompt in _ROBOT_NAME_PROMPTS
+        )
+
     def listen(
         self,
         *,
@@ -150,19 +195,24 @@ class OfflineSpeechRecognizer:
         audio_path = Path(raw_path)
         try:
             self._capture(audio_path, duration_seconds)
+            audio_samples = self._read_pcm_wav(audio_path)
             model = self._ensure_model()
-            hints = "，".join(dict.fromkeys(item.strip() for item in roster_hints if item.strip()))
+            unique_hints = list(dict.fromkeys(
+                item.strip() for item in roster_hints if item.strip()
+            ))
+            hints = "，".join(unique_hints)
             if purpose == "confirmation":
                 initial_prompt = "回答是、對、正確、沒錯，或不是、不對。"
                 hotwords = "是 對 正確 沒錯 不是 不對 yes no"
             else:
                 initial_prompt = f"受測者會說出自己的姓名。名冊姓名可能是：{hints}。"
-                hotwords = hints
+                hotwords = " ".join(unique_hints)
 
             try:
                 segments, info = model.transcribe(
-                    str(audio_path),
+                    audio_samples,
                     task="transcribe",
+                    language="zh",
                     beam_size=5,
                     best_of=5,
                     vad_filter=True,
@@ -175,11 +225,21 @@ class OfflineSpeechRecognizer:
             except Exception as exc:
                 raise SpeechRecognitionError(f"語音辨識失敗：{exc}") from exc
 
+            if purpose == "name":
+                segment_texts = [
+                    text for text in segment_texts
+                    if not self._is_robot_name_prompt(text)
+                ]
+
             full_text = " ".join(segment_texts).strip()
             transcripts = list(dict.fromkeys(
                 text for text in [full_text, *segment_texts] if text
             ))
             if not transcripts:
+                if purpose == "name":
+                    raise SpeechRecognitionError(
+                        "只收到凱比提示音；請等提示結束後再說姓名"
+                    )
                 raise SpeechRecognitionError("沒有辨識到清楚語音")
             return {
                 "transcripts": transcripts[:5],

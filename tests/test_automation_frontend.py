@@ -62,3 +62,11 @@ def test_gecko_falls_back_to_pc_side_offline_speech_recognition():
     assert "'/speech/listen'" in source
     assert "purpose === 'confirmation' ? 3.5 : 4.5" in source
     assert "已自動改用電腦端 C922 麥克風與離線模型" in source
+
+
+def test_robot_speech_is_suppressed_while_c922_is_listening():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "POST_TTS_LISTEN_DELAY_MS" in source
+    assert "speechCaptureActive = true" in source
+    assert "if (speechCaptureActive || !speechEnabled" in source
+    assert "currentRecordingActionId || automationServerState.state === 'armed'" in source

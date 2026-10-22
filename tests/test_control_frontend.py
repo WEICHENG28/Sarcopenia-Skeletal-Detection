@@ -12,3 +12,4 @@ def test_control_page_reports_and_tests_offline_speech():
     assert "purpose: 'name'" in source
     assert "api('/participants/match'" in source
     assert "failureMessage" in source
+    assert source.count("document.getElementById('errorText').textContent = '';") == 1

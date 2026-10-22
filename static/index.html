@@ -853,7 +853,11 @@
                 if (live.outOfFrameSince === null) live.outOfFrameSince = nowSec;
                 if (nowSec - live.outOfFrameSince >= OUT_OF_FRAME_SEC) {
                     setBanner('⚠️ 請確認全身（肩膀到膝蓋）都在畫面內', 'warn');
-                    speak('請完整入鏡');
+                    // 姓名辨識時必須保持凱比安靜，否則頭上的 C922 會把
+                    // 凱比自己的提示音當成受測者回答。
+                    if (currentRecordingActionId || automationServerState.state === 'armed') {
+                        speak('請完整入鏡');
+                    }
                 }
             } else {
                 live.outOfFrameSince = null;
@@ -1039,6 +1043,8 @@
         ];
         const TTS_TIMEOUT_MIN_MS = 2500;
         const TTS_TIMEOUT_MAX_MS = 18000;
+        const POST_TTS_LISTEN_DELAY_MS = 800;
+        let speechCaptureActive = false;
         const RECORDED_PROMPTS = Object.freeze({
             '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
             '您好，請清楚說出您的姓名。': '/static/tts/ask_name.mp3',
@@ -1271,24 +1277,31 @@
         }
 
         async function recognizeWithServer(purpose) {
+            speechCaptureActive = true;
+            stopPromptPlayback();
             setBanner('🎤 電腦正在透過 C922 麥克風收音，請清楚說話', 'info');
-            const result = await requestJson('/speech/listen', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    purpose,
-                    duration_seconds: purpose === 'confirmation' ? 3.5 : 4.5
-                })
-            });
-            if (!Array.isArray(result.transcripts) || result.transcripts.length === 0) {
-                throw new Error('沒有辨識到清楚語音');
+            try {
+                const result = await requestJson('/speech/listen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        purpose,
+                        duration_seconds: purpose === 'confirmation' ? 3.5 : 4.5
+                    })
+                });
+                if (!Array.isArray(result.transcripts) || result.transcripts.length === 0) {
+                    throw new Error('沒有辨識到清楚語音');
+                }
+                return result.transcripts;
+            } finally {
+                speechCaptureActive = false;
             }
-            return result.transcripts;
         }
 
         async function recognizeOnce(promptText, purpose = 'name') {
             await speakAsync(promptText);
-            await new Promise(resolve => setTimeout(resolve, 350));
+            // 等待喇叭尾音消失後才開啟麥克風，避免把凱比自己的問題收進去。
+            await new Promise(resolve => setTimeout(resolve, POST_TTS_LISTEN_DELAY_MS));
             if (!SpeechRecognitionCtor) return recognizeWithServer(purpose);
             return new Promise((resolve, reject) => {
                 const recognition = new SpeechRecognitionCtor();
@@ -1491,7 +1504,7 @@
         }
 
         function speak(text) {
-            if (!speechEnabled || !('speechSynthesis' in window)) return;
+            if (speechCaptureActive || !speechEnabled || !('speechSynthesis' in window)) return;
             const now = Date.now();
             if (live.lastSpokenAt[text] && now - live.lastSpokenAt[text] < 2500) return;
             live.lastSpokenAt[text] = now;

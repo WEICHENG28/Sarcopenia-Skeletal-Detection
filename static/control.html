@@ -90,7 +90,6 @@
             const busy = ['armed','identifying','testing'].includes(state.state);
             document.getElementById('startBtn').disabled = !roster.ready || busy;
             document.getElementById('testSpeechBtn').disabled = !speech.available || busy || speechTestRunning;
-            document.getElementById('errorText').textContent = '';
         } catch (error) {
             document.getElementById('errorText').textContent = error.message;
         }

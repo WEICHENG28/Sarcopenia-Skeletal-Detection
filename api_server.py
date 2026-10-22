@@ -214,7 +214,12 @@ def public_profile(record: Dict[str, Any]) -> Dict[str, Any]:
 
 def match_roster_names(records: list[Dict[str, Any]],
                        transcripts: list[str]) -> list[Dict[str, Any]]:
-    """依姓名或名冊別名精確配對；多筆結果交由本人確認，絕不猜測。"""
+    """依姓名或名冊別名的精確字串配對，不使用相似音猜測。
+
+    語音模型常回傳「我的名字是王小明」而不是只有「王小明」，因此除了
+    整句相等，也允許姓名／別名完整出現在句子中。若一句話同時命中多人，
+    呼叫端仍會要求本人確認，不會自行挑選。
+    """
     heard = {normalize_spoken_name(text) for text in transcripts if text.strip()}
     matches: list[Dict[str, Any]] = []
     for record in records:
@@ -224,7 +229,12 @@ def match_roster_names(records: list[Dict[str, Any]],
             for alias in re.split(r"[;；]", record.get("name_aliases", ""))
             if alias.strip()
         )
-        if heard & accepted:
+        if any(
+            spoken == name or name in spoken
+            for spoken in heard
+            for name in accepted
+            if name
+        ):
             matches.append(public_profile(record))
     return matches
 
