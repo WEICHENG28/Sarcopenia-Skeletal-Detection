@@ -1,9 +1,9 @@
-"""Offline speech recognition backed by the PC-connected C922 microphone.
+"""Offline speech recognition for C922 and Kebbi microphone recordings.
 
-The Kebbi Gecko browser does not expose the Web Speech API.  This module keeps
-speech recognition on the analysis computer: FFmpeg captures a short WAV from
-the C922 microphone and faster-whisper transcribes it locally.  Temporary audio
-is always removed after transcription.
+The Kebbi browser may not expose the Web Speech API, so inference stays on the
+analysis computer. Audio can either be captured from the PC-connected C922 or
+uploaded from Kebbi's built-in microphone. Temporary audio is always removed
+after transcription.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ _ROBOT_NAME_PROMPTS = (
     "請完整",
     "請完整入鏡",
     "您好請清楚說出您的姓名",
+    "您好請在嗶聲後只說您的姓名例如王小明",
 )
 
 
@@ -34,7 +35,7 @@ class SpeechRecognitionError(RuntimeError):
 
 
 class OfflineSpeechRecognizer:
-    """Capture short utterances and transcribe them with a lazy-loaded model."""
+    """Transcribe short C922 or Kebbi utterances with a lazy-loaded model."""
 
     def __init__(
         self,
@@ -160,25 +161,176 @@ class OfflineSpeechRecognizer:
                 sample_rate = source.getframerate()
                 frames = source.readframes(source.getnframes())
         except (OSError, EOFError, wave.Error) as exc:
-            raise SpeechRecognitionError(f"C922 錄音檔無法讀取：{exc}") from exc
+            raise SpeechRecognitionError(f"語音錄音檔無法讀取：{exc}") from exc
 
         if (channels, sample_width, sample_rate) != (1, 2, 16000):
             raise SpeechRecognitionError(
-                "C922 錄音格式不符，預期為單聲道、16 kHz、16-bit PCM"
+                "錄音格式不符，預期為單聲道、16 kHz、16-bit PCM"
             )
         if not frames:
-            raise SpeechRecognitionError("C922 麥克風沒有收到有效音訊")
+            raise SpeechRecognitionError("麥克風沒有收到有效音訊")
         return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
 
     @staticmethod
     def _is_robot_name_prompt(text: str) -> bool:
         """Recognize short echoes of Kebbi's own prompts, not user names."""
         normalized = re.sub(r"[^0-9a-z\u3400-\u9fff]+", "", text.casefold())
-        return any(
-            normalized == prompt
-            or (3 <= len(normalized) <= len(prompt) and normalized in prompt)
-            for prompt in _ROBOT_NAME_PROMPTS
+        if not normalized:
+            return False
+        for prompt in _ROBOT_NAME_PROMPTS:
+            if normalized == prompt:
+                return True
+            if not (3 <= len(normalized) <= len(prompt) and normalized in prompt):
+                continue
+            # Do not reject a participant's direct answer merely because the
+            # sample name also appears in Kebbi's instruction.  A partial echo
+            # must contain wording that identifies it as an instruction.
+            if any(marker in normalized for marker in (
+                "請完整",
+                "完整入鏡",
+                "您好",
+                "嗶聲",
+                "姓名",
+                "只說",
+                "例如",
+            )):
+                return True
+        return False
+
+    def _transcribe_samples(
+        self,
+        audio_samples: np.ndarray,
+        *,
+        purpose: str,
+        roster_hints: list[str],
+    ) -> dict[str, Any]:
+        model = self._ensure_model()
+        unique_hints = list(dict.fromkeys(
+            item.strip() for item in roster_hints if item.strip()
+        ))
+        hints = "，".join(unique_hints)
+        if purpose == "confirmation":
+            initial_prompt = "回答是、對、正確、沒錯，或不是、不對。"
+            hotwords = "是 對 正確 沒錯 不是 不對 yes no"
+        else:
+            initial_prompt = f"受測者只會直接說姓名。名冊姓名可能是：{hints}。"
+            hotwords = " ".join(unique_hints)
+
+        try:
+            segments, info = model.transcribe(
+                audio_samples,
+                task="transcribe",
+                language="zh",
+                beam_size=5,
+                best_of=5,
+                vad_filter=True,
+                vad_parameters={"min_silence_duration_ms": 300},
+                condition_on_previous_text=False,
+                initial_prompt=initial_prompt,
+                hotwords=hotwords or None,
+            )
+            segment_texts = [
+                segment.text.strip() for segment in segments if segment.text.strip()
+            ]
+        except Exception as exc:
+            raise SpeechRecognitionError(f"語音辨識失敗：{exc}") from exc
+
+        if purpose == "name":
+            segment_texts = [
+                text for text in segment_texts
+                if not self._is_robot_name_prompt(text)
+            ]
+
+        full_text = " ".join(segment_texts).strip()
+        transcripts = list(dict.fromkeys(
+            text for text in [full_text, *segment_texts] if text
+        ))
+        if not transcripts:
+            if purpose == "name":
+                raise SpeechRecognitionError(
+                    "只收到凱比提示音；請等提示結束後再說姓名"
+                )
+            raise SpeechRecognitionError("沒有辨識到清楚語音")
+        return {
+            "transcripts": transcripts[:5],
+            "language": getattr(info, "language", None),
+            "language_probability": getattr(info, "language_probability", None),
+            "model": self.model_name,
+        }
+
+    def _convert_uploaded_audio(self, source: Path, destination: Path) -> None:
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            completed = subprocess.run(
+                [
+                    self.ffmpeg,
+                    "-hide_banner", "-loglevel", "error", "-y",
+                    "-i", str(source),
+                    "-ac", "1", "-ar", "16000",
+                    "-c:a", "pcm_s16le",
+                    str(destination),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=20,
+                creationflags=creationflags,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise SpeechRecognitionError("凱比麥克風音訊轉換逾時") from exc
+        except OSError as exc:
+            raise SpeechRecognitionError(f"無法處理凱比麥克風音訊：{exc}") from exc
+
+        if (completed.returncode != 0 or not destination.exists()
+                or destination.stat().st_size < 1_000):
+            detail = completed.stderr.decode("utf-8", errors="replace").strip()
+            raise SpeechRecognitionError(detail or "凱比麥克風沒有收到有效音訊")
+
+    def transcribe_upload(
+        self,
+        audio_bytes: bytes,
+        *,
+        content_type: str,
+        purpose: str,
+        roster_hints: list[str],
+    ) -> dict[str, Any]:
+        """Convert a browser recording from Kebbi and transcribe it locally."""
+        if not self._listen_lock.acquire(blocking=False):
+            raise SpeechRecognitionError("另一段語音正在辨識，請稍候")
+
+        media_type = content_type.partition(";")[0].strip().casefold()
+        suffix = {
+            "audio/ogg": ".ogg",
+            "audio/webm": ".webm",
+            "audio/mp4": ".m4a",
+            "audio/mpeg": ".mp3",
+            "audio/wav": ".wav",
+            "audio/x-wav": ".wav",
+        }.get(media_type, ".webm")
+        source_fd, source_path = tempfile.mkstemp(
+            prefix="sarcopenia-kebbi-", suffix=suffix
         )
+        pcm_fd, pcm_path = tempfile.mkstemp(
+            prefix="sarcopenia-kebbi-pcm-", suffix=".wav"
+        )
+        os.close(source_fd)
+        os.close(pcm_fd)
+        source = Path(source_path)
+        pcm = Path(pcm_path)
+        try:
+            source.write_bytes(audio_bytes)
+            self._convert_uploaded_audio(source, pcm)
+            return self._transcribe_samples(
+                self._read_pcm_wav(pcm),
+                purpose=purpose,
+                roster_hints=roster_hints,
+            )
+        finally:
+            try:
+                source.unlink(missing_ok=True)
+                pcm.unlink(missing_ok=True)
+            finally:
+                self._listen_lock.release()
 
     def listen(
         self,
@@ -196,57 +348,11 @@ class OfflineSpeechRecognizer:
         try:
             self._capture(audio_path, duration_seconds)
             audio_samples = self._read_pcm_wav(audio_path)
-            model = self._ensure_model()
-            unique_hints = list(dict.fromkeys(
-                item.strip() for item in roster_hints if item.strip()
-            ))
-            hints = "，".join(unique_hints)
-            if purpose == "confirmation":
-                initial_prompt = "回答是、對、正確、沒錯，或不是、不對。"
-                hotwords = "是 對 正確 沒錯 不是 不對 yes no"
-            else:
-                initial_prompt = f"受測者會說出自己的姓名。名冊姓名可能是：{hints}。"
-                hotwords = " ".join(unique_hints)
-
-            try:
-                segments, info = model.transcribe(
-                    audio_samples,
-                    task="transcribe",
-                    language="zh",
-                    beam_size=5,
-                    best_of=5,
-                    vad_filter=True,
-                    vad_parameters={"min_silence_duration_ms": 300},
-                    condition_on_previous_text=False,
-                    initial_prompt=initial_prompt,
-                    hotwords=hotwords or None,
-                )
-                segment_texts = [segment.text.strip() for segment in segments if segment.text.strip()]
-            except Exception as exc:
-                raise SpeechRecognitionError(f"語音辨識失敗：{exc}") from exc
-
-            if purpose == "name":
-                segment_texts = [
-                    text for text in segment_texts
-                    if not self._is_robot_name_prompt(text)
-                ]
-
-            full_text = " ".join(segment_texts).strip()
-            transcripts = list(dict.fromkeys(
-                text for text in [full_text, *segment_texts] if text
-            ))
-            if not transcripts:
-                if purpose == "name":
-                    raise SpeechRecognitionError(
-                        "只收到凱比提示音；請等提示結束後再說姓名"
-                    )
-                raise SpeechRecognitionError("沒有辨識到清楚語音")
-            return {
-                "transcripts": transcripts[:5],
-                "language": getattr(info, "language", None),
-                "language_probability": getattr(info, "language_probability", None),
-                "model": self.model_name,
-            }
+            return self._transcribe_samples(
+                audio_samples,
+                purpose=purpose,
+                roster_hints=roster_hints,
+            )
         finally:
             try:
                 audio_path.unlink(missing_ok=True)

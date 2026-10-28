@@ -38,6 +38,9 @@ def test_capture_command_uses_c922_mic_and_private_pcm_wav(tmp_path):
 def test_kebbi_prompt_echo_is_not_treated_as_a_name():
     assert OfflineSpeechRecognizer._is_robot_name_prompt("請完整﹑") is True
     assert OfflineSpeechRecognizer._is_robot_name_prompt("請完整入鏡") is True
+    assert OfflineSpeechRecognizer._is_robot_name_prompt("只說您的姓名") is True
+    assert OfflineSpeechRecognizer._is_robot_name_prompt("例如王小明") is True
+    assert OfflineSpeechRecognizer._is_robot_name_prompt("王小明") is False
     assert OfflineSpeechRecognizer._is_robot_name_prompt("我的名字是王小明") is False
 
 
@@ -122,3 +125,28 @@ def test_pcm_wav_loader_returns_normalized_float32(tmp_path):
 
     assert samples.dtype == np.float32
     assert samples.tolist() == [-1.0, 0.0, 32767 / 32768]
+
+
+def test_uploaded_kebbi_audio_is_converted_transcribed_and_deleted(monkeypatch):
+    model = FakeModel()
+    recognizer = OfflineSpeechRecognizer(
+        "ffmpeg.exe", model_factory=lambda *args, **kwargs: model
+    )
+    temporary_paths: list[Path] = []
+
+    def fake_convert(source: Path, destination: Path) -> None:
+        temporary_paths.extend([source, destination])
+        assert source.suffix == ".ogg"
+        assert source.read_bytes() == b"kebbi-opus-audio"
+        _write_test_wav(destination)
+
+    monkeypatch.setattr(recognizer, "_convert_uploaded_audio", fake_convert)
+    result = recognizer.transcribe_upload(
+        b"kebbi-opus-audio",
+        content_type="audio/ogg; codecs=opus",
+        purpose="name",
+        roster_hints=["Adam Wang", "Adam"],
+    )
+
+    assert result["transcripts"] == ["Adam Wang"]
+    assert temporary_paths and all(not path.exists() for path in temporary_paths)

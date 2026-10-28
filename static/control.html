@@ -26,6 +26,8 @@
         button:disabled { opacity: .45; cursor: not-allowed; }
         .error { color: #b91c1c; font-weight: 700; margin-top: 16px; min-height: 24px; }
         #speechResult { color: #1e3a8a; font-weight: 700; margin-top: 16px; min-height: 24px; }
+        .rehearsal-link { display: block; margin-top: 16px; padding: 14px; border: 2px solid #1d4ed8; border-radius: 14px; text-align: center; font-size: 18px; font-weight: 800; text-decoration: none; background: #eff6ff; }
+        .rehearsal-link.mock { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
         a { color: #1d4ed8; }
         @media (max-width: 600px) { .actions, .meta { grid-template-columns: 1fr; } }
     </style>
@@ -52,6 +54,8 @@
         </div>
         <div id="speechResult"></div>
         <div class="error" id="errorText"></div>
+        <a class="rehearsal-link" href="/?rehearsal=1" target="_blank" rel="noopener">沒有凱比：開啟電腦彩排畫面</a>
+        <a class="rehearsal-link mock" href="/?rehearsal=1&amp;mock=1" target="_blank" rel="noopener">沒有凱比也沒有Webcam：開啟流程模擬</a>
         <p class="note">名冊請直接在專案的 <code>outputs/automation-roster/受測者名冊.xlsx</code> 編輯，儲存後下一次辨識即會重新讀取。</p>
     </section>
 </main>

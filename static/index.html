@@ -62,6 +62,51 @@
             padding: 20px;
         }
 
+        .rehearsal-banner {
+            max-width: 960px;
+            margin: 95px auto -55px;
+            padding: 14px 20px;
+            border: 2px solid #1d4ed8;
+            border-radius: 16px;
+            background: #eff6ff;
+            color: #1e3a8a;
+            text-align: center;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+        .rehearsal-banner[hidden] { display: none; }
+        .simulation-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 24px;
+            background: linear-gradient(135deg, #111827, #312e81);
+            color: white;
+            text-align: center;
+            font-size: 1.15em;
+            font-weight: 800;
+            z-index: 3;
+        }
+        .simulation-placeholder[hidden] { display: none; }
+        .simulation-placeholder small { max-width: 620px; font-size: .65em; font-weight: 500; opacity: .8; }
+        .simulation-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            margin: 18px 0 28px;
+            padding: 16px;
+            border: 2px dashed #7c3aed;
+            border-radius: 16px;
+            background: #f5f3ff;
+        }
+        .simulation-controls[hidden] { display: none; }
+        .simulation-controls button { padding: 12px 20px; border: 0; border-radius: 12px; background: #6d28d9; color: white; font-weight: 800; cursor: pointer; }
+
         .card {
             background: var(--card-bg);
             border-radius: 30px;
@@ -275,6 +320,10 @@
 </head>
 <body>
 
+    <div class="rehearsal-banner" id="rehearsalBanner" hidden>
+        🧪 電腦彩排模式：本瀏覽器暫代凱比螢幕，姓名辨識固定使用電腦端 C922 麥克風。此模式僅供開發驗證，不代表凱比實機測試完成。
+    </div>
+
     <div class="font-control-bar">
         <span style="font-size: 16px; font-weight: bold;">字體顯示：</span>
         <button class="font-btn" onclick="updateFontSize('16px', this)">標準</button>
@@ -301,6 +350,11 @@
                     </div>
                 </div>
 
+                <div class="simulation-controls" id="simulationControls" hidden>
+                    <button id="runSimulationBtn" onclick="runNoHardwareSimulation()">▶ 播放完整流程模擬</button>
+                    <span>不使用相機、麥克風、錄影或模型推論</span>
+                </div>
+
                 <div class="input-section">
                     <div class="input-box"><label>受測者編號</label><input type="text" id="subjectId" placeholder="SB01"></div>
                     <div class="input-box"><label>年齡</label><input type="number" id="age" placeholder="75"></div>
@@ -319,6 +373,10 @@
                 <div class="video-container">
                     <img id="webcam" alt="C922 即時畫面">
                     <canvas id="poseCanvas"></canvas>
+                    <div class="simulation-placeholder" id="simulationPlaceholder" hidden>
+                        <div id="simulationStage">無硬體流程模擬</div>
+                        <small>這裡只驗證介面、語音提示與狀態順序，不代表入鏡、骨架、錄影、計次或模型已通過。</small>
+                    </div>
                     <div class="live-banner" id="liveBanner"></div>
                     <div class="live-badge" id="liveRepBadge"></div>
                 </div>
@@ -386,6 +444,21 @@
     <script>
         // ── 設定後端位址 ──────────────────────────────────────────
         const API_BASE = window.location.origin;
+        const AUTOMATION_TAB_STORAGE_KEY = 'sarcopenia-active-automation-tab';
+        const AUTOMATION_PAGE_INSTANCE_ID = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        let isActiveAutomationTab = false;
+        const PAGE_PARAMS = new URLSearchParams(window.location.search);
+        const NO_HARDWARE_SIMULATION_MODE = PAGE_PARAMS.get('mock') === '1';
+        const PC_REHEARSAL_MODE = PAGE_PARAMS.get('rehearsal') === '1' || NO_HARDWARE_SIMULATION_MODE;
+        const ALLOW_MANUAL_NAME_FALLBACK = PAGE_PARAMS.get('manual') === '1' || NO_HARDWARE_SIMULATION_MODE;
+        if (PC_REHEARSAL_MODE) {
+            document.getElementById('rehearsalBanner').hidden = false;
+            document.title = '電腦彩排｜肌少症 AI 篩檢系統';
+        }
+        if (NO_HARDWARE_SIMULATION_MODE) {
+            document.getElementById('rehearsalBanner').textContent =
+                '🧪 無硬體流程模擬：不使用凱比、Webcam或麥克風，只驗證介面、提示與狀態順序；不得作為實機或模型成果。';
+        }
 
         // ── 狀態變數 ──────────────────────────────────────────────
         let isRecording = false;
@@ -403,6 +476,39 @@
         let activePromptAudio = null;
         let screenWakeLock = null;
 
+        function claimAutomationTab() {
+            try {
+                localStorage.setItem(AUTOMATION_TAB_STORAGE_KEY, AUTOMATION_PAGE_INSTANCE_ID);
+                isActiveAutomationTab =
+                    localStorage.getItem(AUTOMATION_TAB_STORAGE_KEY) === AUTOMATION_PAGE_INSTANCE_ID;
+            } catch (_) {
+                // Private browsing may disable localStorage. The visible page remains the fallback controller.
+                isActiveAutomationTab = document.visibilityState === 'visible';
+            }
+            return isActiveAutomationTab;
+        }
+
+        function relinquishAutomationTab() {
+            try {
+                if (localStorage.getItem(AUTOMATION_TAB_STORAGE_KEY) === AUTOMATION_PAGE_INSTANCE_ID) {
+                    localStorage.removeItem(AUTOMATION_TAB_STORAGE_KEY);
+                }
+            } catch (_) {}
+            isActiveAutomationTab = false;
+        }
+
+        window.addEventListener('storage', event => {
+            if (event.key !== AUTOMATION_TAB_STORAGE_KEY) return;
+            if (event.newValue && event.newValue !== AUTOMATION_PAGE_INSTANCE_ID) {
+                isActiveAutomationTab = false;
+                cancelLocalAutomation();
+                document.getElementById('automationMessage').textContent =
+                    '此分頁已停止控制；請使用目前顯示中的正式檢測頁。';
+            }
+        });
+
+        window.addEventListener('beforeunload', relinquishAutomationTab);
+
         // ── 動作對應後端 action 名稱 ──────────────────────────────
         const ACTION_MAP = { sit: "Sit", walk: "Walk", squat: "Squat" };
         const BTN_ID_MAP = { sit: "btnSit", walk: "btnWalk", squat: "btnSquat" };
@@ -412,18 +518,85 @@
         // 凱比瀏覽器無法直接讀取接在 Windows 電腦上的 USB 攝影機，
         // 因此由同一台 FastAPI 伺服器提供逐格 JPEG 預覽。
         window.onload = function() {
+            if (document.visibilityState === 'visible') claimAutomationTab();
             const webcam = document.getElementById('webcam');
+            if (NO_HARDWARE_SIMULATION_MODE) {
+                webcam.style.display = 'none';
+                document.getElementById('poseCanvas').style.display = 'none';
+                document.getElementById('simulationPlaceholder').hidden = false;
+                document.getElementById('simulationControls').hidden = false;
+                updateAutomationPanel({ state: 'idle', message: '可播放無硬體流程模擬' });
+                ensureScreenWakeLock();
+                return;
+            }
+            if (!isActiveAutomationTab) {
+                document.getElementById('automationMessage').textContent =
+                    '此背景分頁不會控制檢測；請使用目前顯示中的正式檢測頁。';
+                return;
+            }
             const loadNextFrame = () => {
+                if (!isActiveAutomationTab) return;
                 webcam.src = `${API_BASE}/camera/frame.jpg?t=${Date.now()}`;
             };
-            webcam.onload = () => setTimeout(loadNextFrame, 35);
-            webcam.onerror = () => setTimeout(loadNextFrame, 500);
+            webcam.onload = () => {
+                if (isActiveAutomationTab) setTimeout(loadNextFrame, 35);
+            };
+            webcam.onerror = () => {
+                if (isActiveAutomationTab) setTimeout(loadNextFrame, 500);
+            };
             loadNextFrame();
             initPoseTracking();
             ensureScreenWakeLock();
             pollAutomationState();
             setInterval(pollAutomationState, 1000);
         };
+
+        function simulationPause(milliseconds) {
+            return new Promise(resolve => setTimeout(resolve, milliseconds));
+        }
+
+        async function runNoHardwareSimulation() {
+            if (!NO_HARDWARE_SIMULATION_MODE) return;
+            const button = document.getElementById('runSimulationBtn');
+            const stage = document.getElementById('simulationStage');
+            button.disabled = true;
+            prepareAutomationCycle();
+            document.getElementById('simulationPlaceholder').hidden = false;
+            try {
+                updateAutomationPanel({ state: 'armed', message: '[模擬] 等待受測者完整入鏡' });
+                stage.textContent = '1 / 7　等待完整入鏡';
+                await simulationPause(1000);
+
+                updateAutomationPanel({ state: 'identifying', message: '[模擬] 詢問姓名並比對名冊' });
+                stage.textContent = '2 / 7　姓名確認：王小明（SB01）';
+                await speakAsync('您好，請清楚說出您的姓名。');
+                await simulationPause(700);
+
+                const profile = { participant_id: 'SB01', name: '王小明', age: 45, height_cm: 167, weight_kg: 65, gender: 'male' };
+                loadParticipantIntoForm(profile);
+                updateAutomationPanel({ state: 'profile_loaded', message: '[模擬] 基本資料已載入' });
+                stage.textContent = '3 / 7　基本資料載入完成';
+                await speakAsync('您好，基本資料已載入。接下來將依序進行三項動作測試。');
+
+                updateAutomationPanel({ state: 'testing', message: '[模擬] 三項動作流程進行中' });
+                for (let index = 0; index < AUTOMATED_ACTIONS.length; index++) {
+                    const action = AUTOMATED_ACTIONS[index];
+                    const actionName = ACTION_MAP[action.id];
+                    stage.textContent = `${index + 4} / 7　${ACTION_LABEL[action.id]}：流程模擬`;
+                    setStatus(actionName, 'recording', '模擬進行中');
+                    await speakAsync(action.prompt);
+                    await simulationPause(800);
+                    setStatus(actionName, 'done', '模擬完成（無錄影）');
+                    await speakAsync('結束', { minimumMs: 800 });
+                }
+
+                updateAutomationPanel({ state: 'completed', message: '[模擬] 流程順序完成；未執行錄影、計次或模型推論' });
+                stage.textContent = '7 / 7　流程模擬完成';
+                await speakAsync('流程模擬已完成。本次未執行錄影、計次或分析。');
+            } finally {
+                button.disabled = false;
+            }
+        }
 
         async function ensureScreenWakeLock() {
             if (!('wakeLock' in navigator) || document.visibilityState !== 'visible'
@@ -440,8 +613,11 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
+                claimAutomationTab();
                 ensureScreenWakeLock();
                 pollAutomationState();
+            } else {
+                isActiveAutomationTab = false;
             }
         });
 
@@ -1043,11 +1219,14 @@
         ];
         const TTS_TIMEOUT_MIN_MS = 2500;
         const TTS_TIMEOUT_MAX_MS = 18000;
+        const RECORDED_AUDIO_TIMEOUT_BUFFER_MS = 2000;
+        // 問句完整播放結束後先保留一段安靜時間，再啟動錄音並播放提示嗶聲。
+        // 這可避免凱比喇叭的尾音被自己的麥克風收進姓名錄音。
         const POST_TTS_LISTEN_DELAY_MS = 800;
         let speechCaptureActive = false;
         const RECORDED_PROMPTS = Object.freeze({
             '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
-            '您好，請清楚說出您的姓名。': '/static/tts/ask_name.mp3',
+            '您好，請在嗶聲後，只說您的姓名，例如王小明。': '/static/tts/ask_name.mp3?v=2',
             '您好，基本資料已載入。接下來將依序進行三項動作測試。': '/static/tts/profile_loaded.mp3',
             [AUTOMATED_ACTIONS[0].prompt]: '/static/tts/sit_prompt.mp3',
             [AUTOMATED_ACTIONS[1].prompt]: '/static/tts/walk_prompt.mp3',
@@ -1058,6 +1237,7 @@
             '4': '/static/tts/count_4.mp3',
             '5': '/static/tts/count_5.mp3',
             '開始': '/static/tts/start.mp3',
+            '結束': '/static/tts/end.mp3',
             '請完整入鏡': '/static/tts/enter_frame.mp3',
             '撐住': '/static/tts/hold.mp3',
             '很好': '/static/tts/good.mp3',
@@ -1100,7 +1280,7 @@
                 button.innerText = `錄製：${ACTION_LABEL[actionId]}`;
             });
             ['Sit', 'Walk', 'Squat'].forEach(action => setStatus(action, 'waiting', '等待中'));
-            if (!poseLandmarker && !poseLoopHandle) initPoseTracking();
+            if (!NO_HARDWARE_SIMULATION_MODE && !poseLandmarker && !poseLoopHandle) initPoseTracking();
         }
 
         function cancelLocalAutomation() {
@@ -1124,6 +1304,7 @@
         }
 
         async function pollAutomationState() {
+            if (!isActiveAutomationTab) return;
             try {
                 const previousState = automationServerState.state;
                 const state = await requestJson('/automation/state');
@@ -1153,6 +1334,7 @@
         }
 
         function handleAutomationPresence(framingOk, nowSec) {
+            if (!isActiveAutomationTab) return;
             if (automationServerState.state !== 'armed' || identityFlowRunning) {
                 automationPresenceSince = null;
                 return;
@@ -1204,6 +1386,14 @@
                 let settled = false;
                 let timeoutHandle = null;
                 let promptAudio = null;
+                const armTimeout = milliseconds => {
+                    if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+                    timeoutHandle = setTimeout(() => {
+                        console.warn(`語音播放逾時，流程自動繼續：${text}`);
+                        stopPromptPlayback();
+                        finish();
+                    }, milliseconds);
+                };
                 const finish = () => {
                     if (settled) return;
                     settled = true;
@@ -1219,11 +1409,7 @@
                 }
 
                 stopPromptPlayback();
-                timeoutHandle = setTimeout(() => {
-                    console.warn(`語音播放逾時，流程自動繼續：${text}`);
-                    stopPromptPlayback();
-                    finish();
-                }, timeoutMs);
+                armTimeout(timeoutMs);
 
                 const useBrowserTtsFallback = () => {
                     if (settled) return;
@@ -1254,6 +1440,12 @@
                 promptAudio = new Audio(recordedUrl);
                 activePromptAudio = promptAudio;
                 promptAudio.preload = 'auto';
+                promptAudio.onloadedmetadata = () => {
+                    if (!Number.isFinite(promptAudio.duration) || promptAudio.duration <= 0) return;
+                    const audioTimeoutMs = Math.ceil(promptAudio.duration * 1000)
+                        + RECORDED_AUDIO_TIMEOUT_BUFFER_MS;
+                    armTimeout(Math.max(timeoutMs, audioTimeoutMs));
+                };
                 promptAudio.onended = finish;
                 promptAudio.onerror = () => {
                     if (activePromptAudio === promptAudio) activePromptAudio = null;
@@ -1298,10 +1490,139 @@
             }
         }
 
+        function supportsKebbiMicrophone() {
+            return Boolean(
+                navigator.mediaDevices
+                && navigator.mediaDevices.getUserMedia
+                && typeof MediaRecorder !== 'undefined'
+                && typeof FormData !== 'undefined'
+            );
+        }
+
+        function preferredAudioMimeType() {
+            if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+            return [
+                'audio/webm;codecs=opus',
+                'audio/ogg;codecs=opus',
+                'audio/webm',
+                'audio/ogg'
+            ].find(type => MediaRecorder.isTypeSupported(type)) || '';
+        }
+
+        function playListeningBeep() {
+            return new Promise(resolve => {
+                const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextCtor) {
+                    resolve();
+                    return;
+                }
+                let context;
+                try {
+                    context = new AudioContextCtor();
+                    const oscillator = context.createOscillator();
+                    const gain = context.createGain();
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = 880;
+                    gain.gain.value = 0.12;
+                    oscillator.connect(gain);
+                    gain.connect(context.destination);
+                    oscillator.onended = () => {
+                        Promise.resolve(context.close()).finally(resolve);
+                    };
+                    oscillator.start();
+                    oscillator.stop(context.currentTime + 0.18);
+                } catch (_) {
+                    if (context) Promise.resolve(context.close()).finally(resolve);
+                    else resolve();
+                }
+            });
+        }
+
+        async function captureKebbiMicrophone(durationMs) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: false,
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1
+                }
+            });
+            try {
+                const mimeType = preferredAudioMimeType();
+                const recorder = mimeType
+                    ? new MediaRecorder(stream, { mimeType })
+                    : new MediaRecorder(stream);
+                const chunks = [];
+                const stopped = new Promise((resolve, reject) => {
+                    recorder.ondataavailable = event => {
+                        if (event.data && event.data.size > 0) chunks.push(event.data);
+                    };
+                    recorder.onstop = resolve;
+                    recorder.onerror = event => reject(
+                        event.error || new Error('凱比麥克風錄音失敗')
+                    );
+                });
+                recorder.start(250);
+                setBanner('🎤 聽到嗶聲後，請清楚說話', 'info');
+                await playListeningBeep();
+                await new Promise(resolve => setTimeout(resolve, durationMs));
+                if (recorder.state !== 'inactive') recorder.stop();
+                await stopped;
+                const blob = new Blob(chunks, {
+                    type: recorder.mimeType || mimeType || 'audio/webm'
+                });
+                if (blob.size < 1000) throw new Error('凱比麥克風沒有收到有效音訊');
+                return blob;
+            } finally {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        async function recognizeWithKebbiMicrophone(purpose) {
+            speechCaptureActive = true;
+            stopPromptPlayback();
+            const seconds = purpose === 'confirmation' ? 3.5 : 4.5;
+            setBanner(`🎤 正在使用凱比麥克風收音 ${seconds} 秒，請清楚說話`, 'info');
+            try {
+                const blob = await captureKebbiMicrophone(seconds * 1000);
+                const form = new FormData();
+                form.append('audio', blob, 'kebbi-speech');
+                const result = await requestJson(
+                    `/speech/transcribe-upload?purpose=${encodeURIComponent(purpose)}`,
+                    { method: 'POST', body: form }
+                );
+                if (!Array.isArray(result.transcripts) || result.transcripts.length === 0) {
+                    throw new Error('沒有辨識到清楚語音');
+                }
+                return result.transcripts;
+            } finally {
+                speechCaptureActive = false;
+            }
+        }
+
+        function isSpeechBusyError(error) {
+            return String(error?.message || error).includes('另一段語音正在辨識');
+        }
+
         async function recognizeOnce(promptText, purpose = 'name') {
+            if (!isActiveAutomationTab) throw new Error('此分頁已停止控制自動檢測');
             await speakAsync(promptText);
-            // 等待喇叭尾音消失後才開啟麥克風，避免把凱比自己的問題收進去。
+            // speakAsync 只會在問句音檔播放完畢後返回；接著留出安靜間隔，
+            // 再由 captureKebbiMicrophone 啟動錄音器並播放短嗶聲。
             await new Promise(resolve => setTimeout(resolve, POST_TTS_LISTEN_DELAY_MS));
+            if (PC_REHEARSAL_MODE) return recognizeWithServer(purpose);
+            if (supportsKebbiMicrophone()) {
+                try {
+                    return await recognizeWithKebbiMicrophone(purpose);
+                } catch (error) {
+                    if (isSpeechBusyError(error)) throw error;
+                    console.warn('凱比麥克風無法使用，改用 C922 麥克風：', error);
+                    document.getElementById('automationMessage').textContent =
+                        `凱比麥克風無法使用（${error.message}），已改用 C922 麥克風。`;
+                    return recognizeWithServer(purpose);
+                }
+            }
             if (!SpeechRecognitionCtor) return recognizeWithServer(purpose);
             return new Promise((resolve, reject) => {
                 const recognition = new SpeechRecognitionCtor();
@@ -1347,15 +1668,23 @@
         }
 
         async function startIdentityConversation() {
+            if (!isActiveAutomationTab) return;
             setBanner('🎤 請在提示後清楚說出姓名', 'info');
-            if (!SpeechRecognitionCtor) {
+            if (supportsKebbiMicrophone()) {
+                document.getElementById('automationMessage').textContent =
+                    '目前使用凱比內建麥克風收音，並由電腦端離線模型辨識。';
+            } else if (!SpeechRecognitionCtor) {
                 document.getElementById('automationMessage').textContent =
                     '凱比瀏覽器不支援語音辨識，已自動改用電腦端 C922 麥克風與離線模型。';
             }
 
             for (let attempt = 1; attempt <= 3; attempt++) {
+                if (!isActiveAutomationTab) return;
                 try {
-                    const names = await recognizeOnce('您好，請清楚說出您的姓名。', 'name');
+                    const names = await recognizeOnce(
+                        '您好，請在嗶聲後，只說您的姓名，例如王小明。',
+                        'name'
+                    );
                     const result = await findParticipant(names);
                     if (result.match_count !== 1) {
                         await speakAsync(result.match_count > 1
@@ -1376,16 +1705,28 @@
                     await confirmParticipant(candidate);
                     return;
                 } catch (error) {
+                    if (!isActiveAutomationTab) return;
+                    if (isSpeechBusyError(error) && attempt < 3) {
+                        document.getElementById('automationMessage').textContent =
+                            '語音服務仍在處理上一段錄音，稍候後自動重試。';
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        continue;
+                    }
                     if (attempt < 3) await speakAsync('我沒有聽清楚，請再說一次。');
                     else await reportAutomationFailure(`姓名辨識三次未成功：${error.message}`);
                 }
             }
             identityFlowRunning = false;
-            document.getElementById('manualNameFallback').style.display = 'flex';
-            await speakAsync(
-                '您好，請在畫面輸入您的姓名，完成後按確認姓名。',
-                { minimumMs: 3000 }
-            );
+            if (ALLOW_MANUAL_NAME_FALLBACK) {
+                document.getElementById('manualNameFallback').style.display = 'flex';
+                await speakAsync(
+                    '您好，請在畫面輸入您的姓名，完成後按確認姓名。',
+                    { minimumMs: 3000 }
+                );
+            } else {
+                document.getElementById('manualNameFallback').style.display = 'none';
+                await speakAsync('姓名辨識失敗，本次檢測已停止。');
+            }
         }
 
         async function submitManualName() {
@@ -1429,6 +1770,7 @@
         }
 
         async function reportAutomationFailure(message, changePanel = true) {
+            if (!isActiveAutomationTab) return;
             if (changePanel) document.getElementById('automationMessage').textContent = message;
             try {
                 const state = await requestJson('/automation/failed', {
@@ -1442,6 +1784,7 @@
         }
 
         async function beginAutomatedTests(profile) {
+            if (!isActiveAutomationTab) return;
             if (automationSequenceActive) return;
             automationSequenceActive = true;
             automationActionIndex = -1;
@@ -1464,6 +1807,11 @@
         async function advanceAutomatedTest(finishedActionId, token = automationRunToken) {
             if (!automationSequenceActive || token !== automationRunToken) return;
             if (finishedActionId && AUTOMATED_ACTIONS[automationActionIndex]?.id !== finishedActionId) return;
+            if (finishedActionId) {
+                setBanner(`${ACTION_LABEL[finishedActionId]}：結束`, 'ok');
+                await speakAsync('結束', { minimumMs: 800 });
+                if (!automationSequenceActive || token !== automationRunToken) return;
+            }
             automationActionIndex++;
 
             if (automationActionIndex >= AUTOMATED_ACTIONS.length) {

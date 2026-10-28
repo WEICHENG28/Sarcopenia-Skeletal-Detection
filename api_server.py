@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -29,11 +30,12 @@ from typing import Any, Dict, Literal
 from xml.etree import ElementTree
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -43,6 +45,8 @@ from src.dataset_manifest import ACTIONS
 from src.predict import predict
 from speech_recognition_service import OfflineSpeechRecognizer, SpeechRecognitionError
 from webcam_capture import CAMERA_NAME, CameraHub, find_ffmpeg
+
+logger = logging.getLogger("sarcopenia.speech")
 
 # 上傳資料與訓練資料分開存放。
 # 訓練集（data/A_*_json/）是經過稽核與排除規則篩選的，
@@ -54,6 +58,7 @@ JSON_DIR = UPLOAD_DIR / "json"
 RECORDS_CSV = UPLOAD_DIR / "records.csv"
 CAMERA_RECORDINGS_DIR = UPLOAD_DIR / "camera_recordings"
 ROSTER_PATH = BASE_DIR / "outputs" / "automation-roster" / "受測者名冊.xlsx"
+MAX_SPEECH_UPLOAD_BYTES = 5 * 1024 * 1024
 
 EXTRACT_SCRIPT = BASE_DIR / "extract_to_json.py"
 STATIC_DIR = BASE_DIR / "static"
@@ -402,6 +407,19 @@ def speech_status() -> Dict[str, Any]:
     return speech_recognizer.status()
 
 
+def _speech_roster_hints(records: list[Dict[str, Any]], purpose: str) -> list[str]:
+    hints: list[str] = []
+    if purpose == "name":
+        for record in records:
+            hints.append(record["name"])
+            hints.extend(
+                alias.strip()
+                for alias in re.split(r"[;；]", record.get("name_aliases", ""))
+                if alias.strip()
+            )
+    return hints
+
+
 @app.post("/speech/listen")
 def listen_for_speech(request: SpeechListenRequest) -> Dict[str, Any]:
     """Capture a short C922 utterance and transcribe it locally."""
@@ -410,15 +428,7 @@ def listen_for_speech(request: SpeechListenRequest) -> Dict[str, Any]:
     except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
         raise HTTPException(503, str(exc)) from exc
 
-    roster_hints: list[str] = []
-    if request.purpose == "name":
-        for record in records:
-            roster_hints.append(record["name"])
-            roster_hints.extend(
-                alias.strip()
-                for alias in re.split(r"[;；]", record.get("name_aliases", ""))
-                if alias.strip()
-            )
+    roster_hints = _speech_roster_hints(records, request.purpose)
     try:
         result = speech_recognizer.listen(
             purpose=request.purpose,
@@ -426,8 +436,44 @@ def listen_for_speech(request: SpeechListenRequest) -> Dict[str, Any]:
             duration_seconds=request.duration_seconds,
         )
     except SpeechRecognitionError as exc:
+        logger.warning("C922 speech recognition failed: %s", exc)
         raise HTTPException(503, str(exc)) from exc
     return {"status": "recognized", **result}
+
+
+@app.post("/speech/transcribe-upload")
+async def transcribe_uploaded_speech(
+    request: Request,
+    purpose: Literal["name", "confirmation"] = "name",
+    audio: UploadFile = File(...),
+) -> Dict[str, Any]:
+    """Transcribe a short recording uploaded from Kebbi's built-in microphone."""
+    try:
+        audio_bytes = await audio.read(MAX_SPEECH_UPLOAD_BYTES + 1)
+    finally:
+        await audio.close()
+    if not audio_bytes:
+        raise HTTPException(400, "凱比麥克風沒有收到音訊")
+    if len(audio_bytes) > MAX_SPEECH_UPLOAD_BYTES:
+        raise HTTPException(413, "凱比麥克風音訊超過 5 MB")
+
+    try:
+        records = read_roster_rows()
+    except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    try:
+        result = await run_in_threadpool(
+            speech_recognizer.transcribe_upload,
+            audio_bytes,
+            content_type=audio.content_type or request.headers.get("content-type", ""),
+            purpose=purpose,
+            roster_hints=_speech_roster_hints(records, purpose),
+        )
+    except SpeechRecognitionError as exc:
+        logger.warning("Kebbi speech upload failed: %s", exc)
+        raise HTTPException(503, str(exc)) from exc
+    return {"status": "recognized", "source": "kebbi_microphone", **result}
 
 
 @app.get("/automation/state")
