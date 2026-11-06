@@ -370,7 +370,6 @@
         // ── 狀態變數 ──────────────────────────────────────────────
         let stream = null;
         let mediaRecorder = null;
-        let recordedChunks = [];
         let videoData = { sit: null, walk: null, squat: null };
         let timerInterval = null;
         let startTime = 0;
@@ -410,6 +409,7 @@
             const btn = document.getElementById(btnId);
 
             if (mediaRecorder && mediaRecorder.state === "recording") {
+                cancelPendingAutoStop();
                 mediaRecorder.stop();
                 clearInterval(timerInterval);
                 let totalSec = Math.floor((Date.now() - startTime) / 1000);
@@ -420,20 +420,22 @@
                 setBtnState(btnId, false);
                 currentRecordingActionId = null;
                 setBadge('');
+                setBanner('', null);
                 return;
             }
 
             if (videoData[actionId] && !confirm(`確定要重錄【${actionName}】嗎？影片將被覆蓋。`)) return;
 
+            cancelPendingAutoStop();
             setBtnState(btnId, true);
-            recordedChunks = [];
+            const chunks = []; // 每段錄影獨立保存，避免上一段 onstop 寫入新一段的資料
 
             // 優先使用 mp4，不支援則退回 webm
             const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
             mediaRecorder = new MediaRecorder(stream, { mimeType });
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                videoData[actionId] = new Blob(recordedChunks, { type: mimeType });
+                videoData[actionId] = new Blob(chunks, { type: mimeType });
             };
 
             mediaRecorder.start();
@@ -449,7 +451,24 @@
             live = resetLiveState();
             live.recordStart = performance.now() / 1000;
             setBanner('', null);
-            setBadge(REP_TARGET[actionId] ? `0 / ${REP_TARGET[actionId]} 下` : '');
+            setBadge(REP_TARGET[actionId] ? `0 / ${REP_TARGET[actionId]} 下`
+                : actionId === 'squat' ? '半蹲維持 3 秒後，請手動停止' : '走完三公尺後，請手動停止');
+        }
+
+        function cancelPendingAutoStop() {
+            if (autoStopTimer !== null) clearTimeout(autoStopTimer);
+            autoStopTimer = null;
+        }
+
+        function scheduleAutoStop(reason) {
+            cancelPendingAutoStop();
+            const recorder = mediaRecorder;
+            autoStopTimer = setTimeout(() => {
+                // 即使舊 callback 已進入事件佇列，也不能停止下一段（含同動作重錄）。
+                if (mediaRecorder !== recorder || recorder.state !== 'recording') return;
+                autoStopTimer = null;
+                autoStopCurrentRecording(reason);
+            }, 1500);
         }
 
         // 自動停止時走跟手動點擊相同的「停止」邏輯，避免兩套狀態不同步
@@ -643,6 +662,7 @@
             document.getElementById('recordView').style.display = 'none';
             document.getElementById('resultView').style.display  = 'block';
             if (stream) stream.getTracks().forEach(t => t.stop());
+            cancelPendingAutoStop();
             if (poseLoopHandle) cancelAnimationFrame(poseLoopHandle);
             if (poseLandmarker) { poseLandmarker.close(); poseLandmarker = null; }
             window.scrollTo(0, 0);
@@ -685,10 +705,10 @@
         //
         // 錄影當下用瀏覽器版 MediaPipe 即時跑骨架，做三件事：
         //   1) 入鏡檢查：肩膀到膝蓋是否都在畫面內
-        //   2) 動作計次：用髖部上下位移的「相對幅度」自行校準，
+        //   2) 起立坐下計次、半蹲維持 3 秒提示：用髖部上下位移的「相對幅度」自行校準，
         //      不要求達到任何絕對角度／標準姿勢
         //      （肌少症患者本來就可能做不出完整動作，因此門檻寬鬆）
-        //   3) 自動結束：達到目標次數，或偵測到動作已停止一段時間
+        //   3) 起立坐下自動結束；行走與半蹲由操作者手動停止
         // 任何一步失敗都靜默降級，不影響原本的錄影/上傳/分析流程。
         // ══════════════════════════════════════════════════════════
 
@@ -704,10 +724,9 @@
             LANDMARK.L_HIP, LANDMARK.R_HIP, LANDMARK.L_KNEE, LANDMARK.R_KNEE,
         ];
 
-        const REP_TARGET = { sit: 5, squat: 5 };  // 起立坐下／半蹲：達標後自動停止；走路不設次數
+        const REP_TARGET = { sit: 5 };            // 半蹲是維持 3 秒，不是重複 5 次
         const MIN_RECORD_SEC = 3;                 // 至少錄滿幾秒才允許自動停止，避免誤觸
         const STILL_STOP_SEC = 4;                 // 已計到至少 1 下後，靜止多久視為「做不下去了」
-        const WALK_STOP_SEC = 2.5;                // 走路：停止移動多久後自動結束
         const OUT_OF_FRAME_SEC = 1.2;             // 判定「未完整入鏡」所需的持續時間
         const REP_MIN_RANGE = 0.035;              // 一次有效動作所需的最小上下位移（佔畫面高度比例）
         const REP_CALIB_WINDOW_SEC = 8;           // 估計「這個人目前動作幅度」的視窗，涵蓋慢速個案的一次完整動作
@@ -718,6 +737,7 @@
         let poseLandmarker = null;
         let poseLoopHandle = null;
         let currentRecordingActionId = null; // 'sit' | 'walk' | 'squat' | null
+        let autoStopTimer = null;
         let speechEnabled = true;
 
         function resetLiveState() {
@@ -733,10 +753,9 @@
                 outOfFrameSince: null,
                 lastSpokenAt: {},
                 autoStopTriggered: false,
-                _lastWalkPos: null,
-                _lastWalkT: null,
                 holdStartAt: null,   // 半蹲：進入最低點的時間戳
                 holdAnnounced: -1,   // 半蹲：目前倒數已經播報到第幾秒，避免重複播報
+                holdCompleted: false,
             };
         }
         let live = resetLiveState();
@@ -774,9 +793,19 @@
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                 }
-                const result = poseLandmarker.detectForVideo(video, timestampMs);
-                renderPose(canvas, result);
-                evaluatePose(result, timestampMs / 1000);
+                try {
+                    const result = poseLandmarker.detectForVideo(video, timestampMs);
+                    renderPose(canvas, result);
+                    evaluatePose(result, timestampMs / 1000);
+                } catch (err) {
+                    cancelPendingAutoStop();
+                    live = resetLiveState();
+                    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                    setBadge('');
+                    setBanner('即時提示暫停，錄影仍可使用，請手動停止', 'warn');
+                    console.warn('即時姿勢偵測暫停（不影響錄影與上傳）：', err);
+                    return;
+                }
             }
             poseLoopHandle = requestAnimationFrame(poseDetectLoop);
         }
@@ -808,12 +837,24 @@
                 if (!currentRecordingActionId) setBanner('', null);
             }
 
-            if (!currentRecordingActionId || !landmarks) return; // 沒在錄影，或這一幀沒偵測到人：只做入鏡檢查
+            if (!currentRecordingActionId) return;
+            if (!framingOk) {
+                // 失去可用骨架時，不把看不到人的時間算成持續維持或靜止。
+                live.holdStartAt = null;
+                live.holdAnnounced = -1;
+                live.repState = 'unknown';
+                live.smoothedY = null;
+                live.longWindow = [];
+                live.shortWindow = [];
+                live.stillSince = null;
+                live.hasMoved = false;
+                cancelPendingAutoStop();
+                live.autoStopTriggered = false;
+                return;
+            }
 
             const elapsed = nowSec - live.recordStart;
-            if (currentRecordingActionId === 'walk') {
-                evaluateWalk(landmarks, nowSec, elapsed);
-            } else {
+            if (currentRecordingActionId !== 'walk') {
                 evaluateRepMotion(landmarks, nowSec, elapsed);
             }
         }
@@ -855,18 +896,28 @@
             if (range >= REP_MIN_RANGE) {
                 const thUp = yMin + range * 0.3;
                 const thDown = yMin + range * 0.7;
+                // 從坐姿開始時，第一下起立也算一次；校準前狀態尚未設成 down。
+                if (currentRecordingActionId === 'sit' && live.repState === 'unknown'
+                    && live.longWindow[0].y >= thDown) {
+                    live.repState = 'down';
+                }
                 if (live.smoothedY <= thUp) {
-                    if (live.repState === 'down') {
+                    if (live.repState === 'down' && currentRecordingActionId === 'sit') {
                         live.repCount++;
                         onRepCounted(currentRecordingActionId, live.repCount);
                     }
                     live.repState = 'up';
                 } else if (live.smoothedY >= thDown) {
                     live.repState = 'down';
+                } else if (currentRecordingActionId === 'squat') {
+                    live.repState = 'unknown';
                 }
             }
 
-            if (currentRecordingActionId === 'squat') handleSquatHold(nowSec);
+            if (currentRecordingActionId === 'squat') {
+                handleSquatHold(nowSec);
+                return; // 半蹲完成後仍由操作者手動停止，不計次、不因靜止而停止
+            }
 
             maybeAutoStopByReps(currentRecordingActionId, elapsed);
             maybeAutoStopByStillness(elapsed, true, STILL_STOP_SEC, nowSec);
@@ -874,6 +925,7 @@
 
         // 半蹲最低點維持提示：協定要求約 3 秒，用倒數口令引導（不強制，撐不到也不扣分）
         function handleSquatHold(nowSec) {
+            if (live.holdCompleted) return;
             if (live.repState !== 'down') {
                 live.holdStartAt = null;
                 live.holdAnnounced = -1;
@@ -893,22 +945,11 @@
                 speak(String(remaining));
             } else if (remaining === 0 && live.holdAnnounced !== 0) {
                 live.holdAnnounced = 0;
-                setBanner('✅ 很好，已維持 3 秒', 'ok');
-                speak('很好');
+                live.holdCompleted = true;
+                setBanner('✅ 已維持 3 秒，請手動停止錄影', 'ok');
+                setBadge('維持完成，請手動停止');
+                speak('已維持三秒，請手動停止錄影');
             }
-        }
-
-        // 走路：不計次，只看「有沒有在移動」，停止移動一段時間後自動結束
-        function evaluateWalk(landmarks, nowSec, elapsed) {
-            const cx = (landmarks[LANDMARK.L_HIP].x + landmarks[LANDMARK.R_HIP].x) / 2;
-            const cy = (landmarks[LANDMARK.L_HIP].y + landmarks[LANDMARK.R_HIP].y) / 2;
-            if (live._lastWalkPos) {
-                const d = Math.hypot(cx - live._lastWalkPos.x, cy - live._lastWalkPos.y);
-                trackMovement(d > 0.006, nowSec);
-            }
-            live._lastWalkPos = { x: cx, y: cy };
-
-            maybeAutoStopByStillness(elapsed, false, WALK_STOP_SEC, nowSec);
         }
 
         function trackMovement(isMoving, nowSec) {
@@ -934,7 +975,7 @@
                 live.autoStopTriggered = true;
                 setBanner(`✅ 已完成 ${target} 下，即將自動結束錄影`, 'ok');
                 speak(`已完成${target}下，錄影即將結束`);
-                setTimeout(() => autoStopCurrentRecording('已完成目標次數'), 1500);
+                scheduleAutoStop('已完成目標次數');
             }
         }
 
@@ -947,7 +988,7 @@
                 live.autoStopTriggered = true;
                 setBanner('ℹ️ 偵測到動作已停止，自動結束錄影', 'ok');
                 speak('偵測到動作已停止，錄影即將結束');
-                setTimeout(() => autoStopCurrentRecording('偵測到動作停止'), 1500);
+                scheduleAutoStop('偵測到動作停止');
             }
         }
 

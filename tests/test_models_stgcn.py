@@ -36,10 +36,12 @@ class TestHopDistances:
         assert np.isfinite(distances).all()
 
 
+@pytest.fixture(scope="module")
+def adjacency():
+    return build_partitioned_adjacency()
+
+
 class TestPartitionedAdjacency:
-    @pytest.fixture(scope="class")
-    def adjacency(self):
-        return build_partitioned_adjacency()
 
     def test_shape(self, adjacency):
         n = len(BODY_NODES)

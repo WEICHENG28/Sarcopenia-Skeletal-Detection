@@ -106,6 +106,9 @@ python -m src.predict --age 78 --height_cm 152 --weight_kg 48 --gender female   
 
 # 執行測試
 pytest tests/ -q
+
+# 錄影提示與停止流程的前端回歸測試（Node.js 22 以上）
+node --test tests/recording.test.cjs
 ```
 
 > Windows 終端機若出現中文亂碼，加上 `PYTHONIOENCODING=utf-8`。
@@ -167,7 +170,7 @@ src/
 models/                     正式模型（由 train_final.py 產生）
 figures/                    21 張圖表 + 索引
 docs/API_CONTRACT.md        推論介面規格
-tests/                      154 個單元測試
+tests/                      Python 單元測試與前端錄影回歸測試
 results/                    訓練結果、消融結果、資料健檢報告
 _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN 時期）
 ```
@@ -200,7 +203,7 @@ _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN �
   ✅ 訓練名冊（31 人 / 92 樣本）
   ✅ 骨架前處理（座標軸修正、正規化、bone stream）
   ✅ 交叉驗證切分（按人分組，避免資料洩漏）
-  ✅ 單元測試（154 個）
+  ✅ Python 單元測試與前端錄影回歸測試
 
 【模型】
   ✅ 系統 A：手工特徵 + LogReg / RandomForest
