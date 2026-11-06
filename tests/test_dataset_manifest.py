@@ -37,13 +37,13 @@ class TestLabelParsing:
         assert _parse_float(raw) == expected
 
 
+@pytest.fixture(scope="module")
+def manifest():
+    return build_manifest()
+
+
 class TestManifestIntegrity:
     """對照實際資料的整合測試。"""
-
-    @pytest.fixture(scope="class")
-    @classmethod
-    def manifest(cls):
-        return build_manifest()
 
     def test_expected_subject_and_sample_count(self, manifest):
         subjects = {s.subject_id for s in manifest}

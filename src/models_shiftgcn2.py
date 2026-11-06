@@ -56,7 +56,9 @@ class ChannelShift(nn.Module):
 
         shifts = torch.arange(channels) % num_nodes
         # 預先算出每個通道的節點取樣索引，避免 forward 內迴圈
-        order = torch.from_numpy(node_order)
+        # torch.gather 的 index 必須是 int64；np.arange 在 Windows 上預設回傳 int32，
+        # 若不強制轉型，forward() 只在 Windows 上會噴錯。
+        order = torch.from_numpy(node_order).long()
         gather = torch.stack(
             [order[(torch.arange(num_nodes) + int(s)) % num_nodes] for s in shifts]
         )  # [C, V]
