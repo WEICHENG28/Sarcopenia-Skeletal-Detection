@@ -190,6 +190,12 @@
             font-size: 1em;
             border-left: 8px solid var(--primary-color);
         }
+        .caution-box {
+            background: #fffbeb; border: 2px solid var(--warning-color);
+            border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
+            text-align: left; line-height: 1.7;
+        }
+        .caution-box ul { margin: 8px 0 0 0; padding-left: 20px; }
         .features-box ul { margin: 10px 0 0 0; padding-left: 20px; line-height: 2; }
 
         /* 治療師標記區 */
@@ -283,6 +289,10 @@
                 <div class="result-score" id="resProb">0%</div>
                 <div style="font-size: 1.6em; font-weight: bold; margin-bottom: 30px;">
                     風險等級：<span id="resLevel">-</span>
+                </div>
+                <div class="caution-box" id="cautionBox" style="display:none;">
+                    <strong id="cautionTitle">⚠️ 請注意</strong>
+                    <ul id="cautionList"></ul>
                 </div>
                 <div class="advice-box">
                     <strong style="font-size: 1.2em;">💡 AI 專業健康建議：</strong><hr>
@@ -490,6 +500,11 @@
                 level = "無法評估";
                 levelColor = "var(--warning-color)";
                 advice = "【分析結果】資料不足以產出評估。請確認影片已成功上傳，且人物完整入鏡。";
+            } else if (infer.uncertain) {
+                // 不確定時不給明確分級，避免使用者把灰色地帶的結果當成結論
+                level = `結果不確定（模型傾向：${serverLevel || '-'}）`;
+                levelColor = "var(--warning-color)";
+                advice = "【分析結果】本次資料不足以讓模型做出可靠判斷，建議：\n1. 由物理治療師依 AWGS 2019 準則進行標準評估（握力、步速、肌肉量）。\n2. 若因拍攝品質不佳，可依上方提示重新拍攝後再評估。";
             } else if (serverLevel === '高' || (!serverLevel && prob >= 0.70)) {
                 level = "高風險 (High Risk)";
                 levelColor = "var(--danger-color)";
@@ -512,11 +527,38 @@
             advice += "\n\n※ 本評估為篩檢參考，不可取代專業醫療診斷。";
 
             document.getElementById('resInfo').innerText = `受測者編號：${sid}`;
-            document.getElementById('resProb').innerText = `${pct}%`;
+            const probEl = document.getElementById('resProb');
+            probEl.innerText = `${pct}%`;
+            if (infer.uncertain) {
+                const note = document.createElement('span');
+                note.style.fontSize = '0.35em';
+                note.innerText = '（僅供參考）';
+                probEl.appendChild(note);
+            }
             document.getElementById('resProb').style.color = levelColor;
             document.getElementById('resLevel').innerText = level;
             document.getElementById('resLevel').style.color = levelColor;
             document.getElementById('resAdvice').innerText = advice;
+
+            // 不確定原因與警告獨立顯示，不與影響因子混在一起
+            const reasons  = infer.uncertainty_reasons ?? [];
+            const warnings = (infer.warnings ?? []).filter(w => !reasons.includes(w));
+            const cautions = [...reasons, ...warnings];
+            const cautionBox = document.getElementById('cautionBox');
+            if (cautions.length > 0) {
+                document.getElementById('cautionTitle').innerText =
+                    infer.uncertain ? '⚠️ 結果不確定的原因' : '⚠️ 請注意';
+                const ul = document.getElementById('cautionList');
+                ul.innerHTML = '';
+                cautions.forEach(text => {
+                    const li = document.createElement('li');
+                    li.innerText = text;
+                    ul.appendChild(li);
+                });
+                cautionBox.style.display = 'block';
+            } else {
+                cautionBox.style.display = 'none';
+            }
 
             // 顯示影響因子（若有）
             if (infer.top_features && infer.top_features.length > 0) {

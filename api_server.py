@@ -109,7 +109,7 @@ def summarize_for_frontend(result: Dict[str, Any]) -> list[str]:
         if detail.get("performed") and detail.get("probability") is not None:
             lines.append(f"{action} 動作風險指數：{detail['probability']:.0%}")
 
-    lines.extend(result.get("warnings") or [])
+    # warnings 與 uncertainty_reasons 由前端獨立顯示，不混入影響因子
     return lines
 
 

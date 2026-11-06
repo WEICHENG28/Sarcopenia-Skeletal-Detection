@@ -65,6 +65,17 @@ LOW_CONFIDENCE_VISIBILITY = 0.80
 # 低於 30 幀（1 秒）不足以涵蓋任何一個完整動作週期。
 MIN_USABLE_FRAMES = 30
 
+# 灰色地帶：交叉驗證中此區間的陽性、陰性個案大量重疊，模型無法可靠區分。
+# 落在此區間時不給明確分級，改建議由治療師評估。
+UNCERTAIN_LOW = 0.35
+UNCERTAIN_HIGH = 0.70
+
+# 低於此年齡超出訓練族群（69–88 歲），與 _validate_profile 的警告一致
+MIN_SUPPORTED_AGE = 65
+
+# 少於此數量的動作時，單一影片的雜訊無法被其他動作平衡
+MIN_ACTIONS_FOR_CONFIDENT_RESULT = 2
+
 
 @dataclass
 class ActionResult:
@@ -92,6 +103,9 @@ class PredictionResult:
     region_attention: Dict[str, float] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
     message: str = ""
+    # 為 True 時前端不應呈現明確的風險分級，而是建議由治療師評估
+    uncertain: bool = False
+    uncertainty_reasons: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -161,6 +175,53 @@ def _risk_level(probability: float) -> str:
     return "低"
 
 
+def _missing_actions_message(used: Sequence[str], known: Sequence[str]) -> str:
+    missing = [a for a in known if a not in used]
+    return (
+        f"僅完成 {len(used)}/{len(known)} 項動作（缺 {', '.join(missing)}），"
+        f"評估結果的不確定性較高"
+    )
+
+
+def _low_visibility_message(low_quality: Sequence[str]) -> str:
+    return (
+        f"下列動作的關節可見度偏低，座標多為系統推測值，結果可信度較低："
+        f"{', '.join(low_quality)}"
+    )
+
+
+def _young_age_message(age: float) -> str:
+    return f"年齡 {age:.0f} 低於模型訓練族群（69–88 歲），評估結果外推性有限"
+
+
+def _uncertainty_reasons(
+    probability: float,
+    used: Sequence[str],
+    low_quality: Sequence[str],
+    profile: Mapping[str, Any],
+    known: Sequence[str] = ("Sit", "Walk", "Squat"),
+) -> List[str]:
+    """列出此次結果不可靠的原因；空串列代表可給出明確分級。
+
+    醫療情境下寧可回報「不確定」，也不要對不可靠的輸入給出明確結論。
+    與 warnings 重疊的原因沿用同一段文字，前端可直接去重。
+    """
+    reasons: List[str] = []
+    if UNCERTAIN_LOW <= probability < UNCERTAIN_HIGH:
+        reasons.append(
+            f"風險機率 {probability:.0%} 落在模型無法可靠區分的區間"
+            f"（{UNCERTAIN_LOW:.0%}–{UNCERTAIN_HIGH:.0%}）"
+        )
+    if low_quality:
+        reasons.append(_low_visibility_message(low_quality))
+    if len(used) < MIN_ACTIONS_FOR_CONFIDENT_RESULT:
+        reasons.append(_missing_actions_message(used, known))
+    age = float(profile["age"])
+    if age < MIN_SUPPORTED_AGE:
+        reasons.append(_young_age_message(age))
+    return reasons
+
+
 def _region_attention(
     node_importance: np.ndarray,
     node_indices: Sequence[int],
@@ -209,10 +270,8 @@ def _validate_profile(profile: Mapping[str, Any]) -> List[str]:
         warnings.append(f"體重 {weight:.1f} kg 超出常見範圍（25–150）")
 
     # 模型的訓練族群為 69–88 歲長者，超出此範圍的推論外推性有限
-    if age < 65:
-        warnings.append(
-            f"年齡 {age:.0f} 低於模型訓練族群（69–88 歲），評估結果外推性有限"
-        )
+    if age < MIN_SUPPORTED_AGE:
+        warnings.append(_young_age_message(age))
     return warnings
 
 
@@ -351,18 +410,15 @@ def predict(
     risk = float(bundle.stacking.predict_proba([stacking_row])[0][1])
 
     if len(used) < len(known_actions):
-        missing = [a for a in known_actions if a not in used]
-        warnings.append(
-            f"僅完成 {len(used)}/{len(known_actions)} 項動作（缺 {', '.join(missing)}），"
-            f"評估結果的不確定性較高"
-        )
+        warnings.append(_missing_actions_message(used, known_actions))
 
     low_quality = [a for a in used if per_action[a].low_confidence]
     if low_quality:
-        warnings.append(
-            f"下列動作的關節可見度偏低，座標多為系統推測值，結果可信度較低："
-            f"{', '.join(low_quality)}"
-        )
+        warnings.append(_low_visibility_message(low_quality))
+
+    uncertainty_reasons = _uncertainty_reasons(
+        risk, used, low_quality, profile, known_actions
+    )
 
     attention_stack = [
         per_action[a].weight * attentions[a] for a in used if a in attentions
@@ -380,7 +436,9 @@ def predict(
         per_action={a: asdict(r) for a, r in per_action.items()},
         region_attention=region_attention,
         warnings=warnings,
-        message="評估完成",
+        message="評估完成，但結果不確定" if uncertainty_reasons else "評估完成",
+        uncertain=bool(uncertainty_reasons),
+        uncertainty_reasons=uncertainty_reasons,
     )
 
 
