@@ -15,7 +15,7 @@ import pytest
 from src.dataset_manifest import build_manifest
 from src.predict import (
     CLINICAL_REGIONS, PredictionResult, _region_attention, _risk_level,
-    _validate_profile, predict,
+    _uncertainty_reasons, _validate_profile, predict,
 )
 from src.skeleton_io import BODY_NODES
 
@@ -101,6 +101,37 @@ class TestRegionAttention:
         assert regions["下肢近端"] > regions["上肢"]
 
 
+class TestUncertainty:
+    """醫療情境下，不可靠的結果必須標記為不確定，而非給出明確分級。"""
+
+    THREE = ["Sit", "Walk", "Squat"]
+
+    @pytest.mark.parametrize("probability", [0.35, 0.50, 0.69])
+    def test_gray_zone_is_uncertain(self, probability):
+        reasons = _uncertainty_reasons(probability, self.THREE, [], VALID_PROFILE)
+        assert any("區間" in r for r in reasons)
+
+    @pytest.mark.parametrize("probability", [0.10, 0.34, 0.70, 0.95])
+    def test_clear_result_with_good_data_is_certain(self, probability):
+        assert _uncertainty_reasons(probability, self.THREE, [], VALID_PROFILE) == []
+
+    def test_low_visibility_makes_clear_result_uncertain(self):
+        reasons = _uncertainty_reasons(0.90, self.THREE, ["Walk"], VALID_PROFILE)
+        assert any("可見度" in r for r in reasons)
+
+    def test_single_action_is_uncertain(self):
+        reasons = _uncertainty_reasons(0.90, ["Walk"], [], VALID_PROFILE)
+        assert any("動作" in r for r in reasons)
+
+    def test_two_actions_alone_do_not_trigger(self):
+        """A003 缺 Sit 時仍預測正確，2/3 項只發警告、不視為不確定。"""
+        assert _uncertainty_reasons(0.90, ["Sit", "Walk"], [], VALID_PROFILE) == []
+
+    def test_young_subject_is_uncertain(self):
+        reasons = _uncertainty_reasons(0.10, self.THREE, [], {**VALID_PROFILE, "age": 40})
+        assert any("訓練族群" in r for r in reasons)
+
+
 @requires_models
 class TestPredictIntegration:
     def test_three_actions_succeeds(self, sample_paths):
@@ -167,7 +198,8 @@ class TestPredictIntegration:
     def test_output_has_contract_fields(self, sample_paths):
         payload = predict(VALID_PROFILE, sample_paths).to_dict()
         for key in ("ok", "risk_probability", "risk_level", "used_actions",
-                    "per_action", "region_attention", "warnings", "message"):
+                    "per_action", "region_attention", "warnings", "message",
+                    "uncertain", "uncertainty_reasons"):
             assert key in payload
 
     def test_low_visibility_is_flagged(self):
@@ -177,6 +209,7 @@ class TestPredictIntegration:
         result = predict(VALID_PROFILE, {"Walk": str(walk.json_path)})
         assert result.per_action["Walk"]["low_confidence"] is True
         assert any("可見度" in w for w in result.warnings)
+        assert result.uncertain is True
 
     def test_deterministic(self, sample_paths):
         first = predict(VALID_PROFILE, sample_paths)
