@@ -224,6 +224,8 @@ def test_upload_failure_reports_server_detail_instead_of_guessing_server_is_off(
     source = INDEX_PATH.read_text(encoding="utf-8")
     assert "detail = (await res.json()).detail || detail" in source
     assert "上傳或分析失敗" in source
+    assert "本頁仍提供一般性安全衛教" in source
+    assert "showResult(sid" in source
     assert "請確認後端伺服器是否已啟動" not in source
 
 
@@ -233,4 +235,6 @@ def test_failed_or_skipped_inference_is_not_presented_as_low_risk():
     assert "Number.isFinite(rawProbability)" in source
     assert "inferenceAvailable ? `${pct}%` : '--'" in source
     assert "renderRehabEducation(serverLevel || level, inferenceAvailable)" in source
-    assert "box.style.display = inferenceAvailable ? 'block' : 'none'" in source
+    assert "box.style.display = 'block'" in source
+    assert "本次沒有有效的 AI 風險結果" in source
+    assert "不是依本次檢測產生的建議" in source

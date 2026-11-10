@@ -36,7 +36,7 @@
 <main>
     <section class="card">
         <h1>肌少症自動檢測控制台</h1>
-        <p class="note">先確認凱比已開啟正式檢測頁，再按下「啟動一輪檢測」。系統會等待受測者完整入鏡，完成姓名確認後自動帶入名冊資料。</p>
+        <p class="note">先確認凱比已開啟正式檢測頁，再按下「啟動一輪檢測」。系統會等待受測者完整入鏡，再以 C922 掃描受測者編號 QR Code 並自動帶入名冊資料。</p>
         <div class="status">
             <div class="status-label">目前狀態</div>
             <div id="stateText">讀取中…</div>
@@ -44,24 +44,25 @@
             <div class="meta">
                 <div>名冊：<strong id="rosterText">檢查中…</strong></div>
                 <div>受測者：<strong id="participantText">尚未確認</strong></div>
-                <div>語音辨識：<strong id="speechText">檢查中…</strong></div>
+                <div>姓名備援語音：<strong id="speechText">檢查中…</strong></div>
             </div>
         </div>
         <div class="actions">
             <button id="startBtn" onclick="startAutomation()">啟動一輪檢測</button>
-            <button id="testSpeechBtn" onclick="testSpeech()">測試姓名語音</button>
+            <button id="testSpeechBtn" onclick="testSpeech()">測試姓名備援</button>
             <button id="stopBtn" onclick="stopAutomation()">立即停止</button>
         </div>
         <div id="speechResult"></div>
         <div class="error" id="errorText"></div>
         <a class="rehearsal-link" href="/?rehearsal=1" target="_blank" rel="noopener">沒有凱比：開啟電腦彩排畫面</a>
         <a class="rehearsal-link mock" href="/?rehearsal=1&amp;mock=1" target="_blank" rel="noopener">沒有凱比也沒有Webcam：開啟流程模擬</a>
-        <p class="note">名冊請直接在專案的 <code>outputs/automation-roster/受測者名冊.xlsx</code> 編輯，儲存後下一次辨識即會重新讀取。</p>
+        <p class="note">正式身分確認以 <code>outputs/automation-qr/</code> 的受測者編號 QR Code 為主。名冊請在 <code>outputs/automation-roster/受測者名冊.xlsx</code> 編輯；QR 損壞時才使用姓名備援。</p>
     </section>
 </main>
 <script>
     const STATE_LABELS = {
-        idle: '待機', armed: '等待入鏡', identifying: '姓名辨識中',
+        idle: '待機', armed: '等待入鏡', scanning_qr: '掃描 QR Code',
+        identifying: '舊版姓名辨識中',
         profile_loaded: '資料已載入', testing: '動作測試中',
         completed: '本輪完成', error: '需要協助'
     };
@@ -91,7 +92,7 @@
             document.getElementById('speechText').textContent = speech.available
                 ? `可使用（${speech.model}${speech.model_loaded ? '／已載入' : '／待載入'}）`
                 : speech.message;
-            const busy = ['armed','identifying','testing'].includes(state.state);
+            const busy = ['armed','scanning_qr','identifying','profile_loaded','testing'].includes(state.state);
             document.getElementById('startBtn').disabled = !roster.ready || busy;
             document.getElementById('testSpeechBtn').disabled = !speech.available || busy || speechTestRunning;
         } catch (error) {

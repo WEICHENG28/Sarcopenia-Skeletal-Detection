@@ -835,7 +835,15 @@
                 setStatus(actionName, 'error', '失敗 ✗');
                 document.getElementById('btnSubmit').disabled = false;
                 document.getElementById('btnSubmit').innerText = "🚀 傳送影片進行 AI 分析";
-                alert(`上傳或分析失敗：${err.message}\n伺服器位址：${API_BASE}`);
+                const failureMessage = `上傳或分析失敗：${err.message}`;
+                setBanner(`⚠️ ${failureMessage}`, 'warn');
+                showResult(sid, {
+                    inference_result: {
+                        status: 'error',
+                        message: `${failureMessage}。本頁仍提供一般性安全衛教，請勿將其視為個別運動處方。`,
+                        risk_probability: null
+                    }
+                });
                 return;
             }
 
@@ -891,6 +899,7 @@
             renderRehabEducation(serverLevel || level, inferenceAvailable);
 
             // 顯示影響因子（若有）
+            document.getElementById('featuresBox').style.display = 'none';
             if (infer.top_features && infer.top_features.length > 0) {
                 const list = document.getElementById('featuresList');
                 list.innerHTML = '';
@@ -913,16 +922,17 @@
             window.scrollTo(0, 0);
             speak(inferenceAvailable
                 ? '檢測完成。畫面已顯示一般性復健運動衛教，請依自身能力循序進行。'
-                : '本次資料無法完成風險評估，請由工作人員確認後重新檢測。');
+                : '本次資料無法完成風險評估。畫面仍提供一般性安全衛教，請由工作人員確認，不能視為個別運動處方。');
         }
 
         function renderRehabEducation(riskLevel, inferenceAvailable) {
             const box = document.getElementById('rehabEducationBox');
-            box.style.display = inferenceAvailable ? 'block' : 'none';
-            if (!inferenceAvailable) return;
+            box.style.display = 'block';
             const needsAssessment = ['高', '中高', '高風險 (High Risk)',
                 '中高風險 (Moderate-High Risk)', '無法評估'].includes(riskLevel);
-            document.getElementById('rehabIntro').innerText = needsAssessment
+            document.getElementById('rehabIntro').innerText = !inferenceAvailable
+                ? '本次沒有有效的 AI 風險結果；以下僅為一般性安全衛教，不是依本次檢測產生的建議，也不是個別運動處方。若日常活動已有困難，請先接受專業評估。'
+                : needsAssessment
                 ? '以下是一般性安全原則，不是個別運動處方。建議先由復健科、醫師或物理治療師評估，再依能力調整。'
                 : '以下是一般性安全原則，不是個別運動處方；從少量、可穩定完成的活動開始，再逐步增加。';
             const items = [
