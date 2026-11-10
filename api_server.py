@@ -73,6 +73,7 @@ CSV_HEADERS = [
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_-]")
 _NAME_NOISE = re.compile(r"[\s,，.。．·・\-_/\\]+")
+_QR_PAYLOAD = re.compile(r"SARCOPENIA:([A-Za-z0-9_-]{1,64})")
 _ROSTER_HEADERS = {
     "participant_id", "name", "name_aliases", "age",
     "height_cm", "weight_kg", "gender", "enabled",
@@ -121,6 +122,26 @@ def _set_automation_state(state: str, message: str,
         return dict(_automation_state)
 
 
+def _set_automation_state_if_current(
+    expected_state: str,
+    expected_revision: int,
+    state: str,
+    message: str,
+    participant: Dict[str, Any] | None = None,
+) -> Dict[str, Any] | None:
+    """Atomically transition only if no stop/restart occurred meanwhile."""
+    with _automation_lock:
+        if (_automation_state["state"] != expected_state
+                or _automation_state["revision"] != expected_revision):
+            return None
+        _automation_state["revision"] += 1
+        _automation_state["state"] = state
+        _automation_state["message"] = message
+        _automation_state["participant"] = participant
+        _automation_state["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        return dict(_automation_state)
+
+
 def get_automation_state() -> Dict[str, Any]:
     with _automation_lock:
         return dict(_automation_state)
@@ -129,6 +150,12 @@ def get_automation_state() -> Dict[str, Any]:
 def normalize_spoken_name(value: str) -> str:
     """只移除不影響姓名的空白與標點，不做可能配錯人的模糊比對。"""
     return _NAME_NOISE.sub("", str(value or "")).casefold()
+
+
+def parse_qr_participant_id(payload: str) -> str | None:
+    """Accept only the documented, privacy-minimal QR payload format."""
+    match = _QR_PAYLOAD.fullmatch(str(payload or ""))
+    return match.group(1) if match else None
 
 
 def _xlsx_cell_value(cell: ElementTree.Element, shared: list[str],
@@ -362,13 +389,19 @@ def shutdown_event() -> None:
 
 @app.get("/")
 def serve_index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    return FileResponse(
+        str(STATIC_DIR / "index.html"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.get("/control")
 def serve_control():
     """電腦端只需開啟此頁啟動／中止一輪自動檢測。"""
-    return FileResponse(str(STATIC_DIR / "control.html"))
+    return FileResponse(
+        str(STATIC_DIR / "control.html"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.get("/participants/status")
@@ -506,11 +539,67 @@ def automation_person_detected() -> Dict[str, Any]:
     current = get_automation_state()
     if current["state"] != "armed":
         return current
-    return _set_automation_state("identifying", "已偵測到受測者，正在詢問姓名")
+    return _set_automation_state("scanning_qr", "已偵測到受測者，請將 QR Code 對準 C922")
+
+
+@app.post("/automation/qr-scan")
+def automation_qr_scan() -> Dict[str, Any]:
+    """Decode the latest C922 frame and exactly match one roster identifier."""
+    current = get_automation_state()
+    if current["state"] != "scanning_qr":
+        raise HTTPException(409, "目前不是 QR Code 身分確認階段")
+
+    try:
+        payloads = camera.decode_qr_codes(timeout=0.5)
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(503, str(exc)) from exc
+    if not payloads:
+        return {"status": "waiting", "message": "尚未辨識到 QR Code"}
+
+    participant_ids = [
+        participant_id
+        for payload in payloads
+        if (participant_id := parse_qr_participant_id(payload)) is not None
+    ]
+    if not participant_ids:
+        return {
+            "status": "invalid",
+            "message": "QR Code 格式不符；請使用本系統核發的受測者編號 QR Code",
+        }
+    unique_ids = list(dict.fromkeys(participant_ids))
+    if len(unique_ids) != 1:
+        return {"status": "invalid", "message": "畫面中有多個不同的受測者 QR Code"}
+
+    try:
+        records = read_roster_rows()
+    except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
+        raise HTTPException(503, str(exc)) from exc
+    matches = [record for record in records if record["participant_id"] == unique_ids[0]]
+    if len(matches) != 1:
+        return {"status": "invalid", "message": "QR Code 編號未在名冊中找到唯一對應資料"}
+
+    profile = public_profile(matches[0])
+    state = _set_automation_state_if_current(
+        "scanning_qr",
+        current["revision"],
+        "profile_loaded",
+        f"QR Code 已確認 {profile['name']}，準備開始動作測試",
+        profile,
+    )
+    if state is None:
+        raise HTTPException(409, "自動流程已停止或重新啟動，忽略本次 QR 掃描結果")
+    return {
+        "status": "matched",
+        "participant": profile,
+        "automation": state,
+    }
 
 
 @app.post("/automation/profile-loaded")
 def automation_profile_loaded(selection: ParticipantSelection) -> Dict[str, Any]:
+    current = get_automation_state()
+    if current["state"] != "scanning_qr":
+        raise HTTPException(409, "目前不是身分確認階段")
     try:
         records = read_roster_rows()
     except (FileNotFoundError, ValueError, zipfile.BadZipFile) as exc:
@@ -522,9 +611,16 @@ def automation_profile_loaded(selection: ParticipantSelection) -> Dict[str, Any]
     if record is None:
         raise HTTPException(404, "名冊中找不到此受測者")
     profile = public_profile(record)
-    return _set_automation_state(
-        "profile_loaded", f"已確認 {profile['name']}，準備開始動作測試", profile
+    state = _set_automation_state_if_current(
+        "scanning_qr",
+        current["revision"],
+        "profile_loaded",
+        f"已由姓名備援確認 {profile['name']}，準備開始動作測試",
+        profile,
     )
+    if state is None:
+        raise HTTPException(409, "自動流程已停止或重新啟動，忽略本次姓名備援結果")
+    return state
 
 
 @app.post("/automation/testing")
@@ -784,4 +880,6 @@ async def save_label(user_id: str = Form(...), label: int = Form(...)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=True)
+    # Formal device sessions must not reset in-memory automation state when a
+    # watched file changes. Developers can still opt into reload via uvicorn.
+    uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=False)

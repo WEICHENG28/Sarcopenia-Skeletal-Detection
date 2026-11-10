@@ -56,7 +56,9 @@ class ChannelShift(nn.Module):
 
         shifts = torch.arange(channels) % num_nodes
         # 預先算出每個通道的節點取樣索引，避免 forward 內迴圈
-        order = torch.from_numpy(node_order)
+        # Windows NumPy commonly uses int32 for arange; torch.gather requires
+        # an int64 index tensor on every platform.
+        order = torch.from_numpy(np.asarray(node_order, dtype=np.int64))
         gather = torch.stack(
             [order[(torch.arange(num_nodes) + int(s)) % num_nodes] for s in shifts]
         )  # [C, V]

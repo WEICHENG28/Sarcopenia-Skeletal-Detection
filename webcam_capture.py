@@ -16,8 +16,36 @@ import uuid
 from pathlib import Path
 from typing import Iterator
 
+import cv2
+import numpy as np
+
 
 CAMERA_NAME = os.getenv("WEBCAM_NAME", "c922 Pro Stream Webcam")
+
+
+def decode_qr_payloads(jpeg_frame: bytes) -> list[str]:
+    """Decode every distinct QR payload visible in one JPEG camera frame."""
+    encoded = np.frombuffer(jpeg_frame, dtype=np.uint8)
+    image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("C922 畫面不是有效的 JPEG")
+
+    detector = cv2.QRCodeDetector()
+    decoded: list[str] = []
+    try:
+        detected, values, _, _ = detector.detectAndDecodeMulti(image)
+        if detected:
+            decoded.extend(value for value in values if value)
+    except (cv2.error, ValueError):
+        # Older OpenCV builds or frames containing only one QR can fail in the
+        # multi-code path. The single-code decoder remains a safe fallback.
+        pass
+
+    if not decoded:
+        value, _, _ = detector.detectAndDecode(image)
+        if value:
+            decoded.append(value)
+    return list(dict.fromkeys(decoded))
 
 
 def find_ffmpeg() -> str:
@@ -43,6 +71,7 @@ class CameraHub:
         self.fps = fps
         self.condition = threading.Condition()
         self.latest_frame: bytes | None = None
+        self.latest_frame_at: float | None = None
         self.sequence = 0
         self.process: subprocess.Popen[bytes] | None = None
         self.thread: threading.Thread | None = None
@@ -53,6 +82,7 @@ class CameraHub:
         self.recording_id: str | None = None
         self.recording_path: Path | None = None
         self.recording_started_at: float | None = None
+        self.qr_decode_lock = threading.Lock()
 
     def capture_command(self) -> list[str]:
         return [
@@ -134,6 +164,7 @@ class CameraHub:
                         del buffer[: end + 2]
                         with self.condition:
                             self.latest_frame = frame
+                            self.latest_frame_at = time.monotonic()
                             self.sequence += 1
                             self.condition.notify_all()
                         self._write_recording_frame(frame)
@@ -145,16 +176,32 @@ class CameraHub:
             if not self.stop_event.is_set():
                 time.sleep(1)
 
-    def get_frame(self, timeout: float = 5.0) -> bytes | None:
+    def get_frame(self, timeout: float = 5.0,
+                  max_age_seconds: float = 2.0) -> bytes | None:
         self.start()
         deadline = time.monotonic() + timeout
         with self.condition:
-            while self.latest_frame is None and not self.stop_event.is_set():
+            while not self.stop_event.is_set():
+                now = time.monotonic()
+                if (self.latest_frame is not None
+                        and self.latest_frame_at is not None
+                        and now - self.latest_frame_at <= max_age_seconds):
+                    return self.latest_frame
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return None
                 self.condition.wait(remaining)
-            return self.latest_frame
+            return None
+
+    def decode_qr_codes(self, timeout: float = 0.5) -> list[str]:
+        """Decode QR codes from the latest C922 frame on the server."""
+        frame = self.get_frame(timeout=timeout, max_age_seconds=1.0)
+        if frame is None:
+            raise RuntimeError("C922 尚未產生畫面")
+        # QRCodeDetector is CPU-heavy; serialize requests from browser polls so
+        # stale requests cannot build up in FastAPI's worker pool.
+        with self.qr_decode_lock:
+            return decode_qr_payloads(frame)
 
     def frames(self) -> Iterator[bytes]:
         self.start()

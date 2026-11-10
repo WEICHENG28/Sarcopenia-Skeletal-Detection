@@ -78,12 +78,11 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
     assert "提示音檔播放失敗，改用瀏覽器 TTS" in source
 
 
-def test_gecko_falls_back_to_pc_side_offline_speech_recognition():
+def test_optional_speech_helper_still_supports_pc_side_offline_recognition():
     source = INDEX_PATH.read_text(encoding="utf-8")
     assert "recognizeWithServer" in source
     assert "'/speech/listen'" in source
     assert "purpose === 'confirmation' ? 3.5 : 4.5" in source
-    assert "已自動改用電腦端 C922 麥克風與離線模型" in source
 
 
 def test_robot_speech_is_suppressed_while_c922_is_listening():
@@ -104,17 +103,12 @@ def test_kebbi_listening_starts_promptly_and_beeps_after_recorder_start():
     assert "聽到嗶聲後，請清楚說話" in source
 
 
-def test_name_question_uses_the_matching_prerecorded_prompt_before_listening():
+def test_name_speech_prompt_is_not_invoked_by_formal_identity_flow():
     source = INDEX_PATH.read_text(encoding="utf-8")
     prompt = "您好，請在嗶聲後，只說您的姓名，例如王小明。"
     assert f"'{prompt}': '/static/tts/ask_name.mp3?v=2'" in source
-    assert f"'{prompt}',\n                        'name'" in source
-    assert source.index("await speakAsync(promptText);") < source.index(
-        "await new Promise(resolve => setTimeout(resolve, POST_TTS_LISTEN_DELAY_MS));"
-    )
-    assert source.index("await speakAsync(promptText);") < source.index(
-        "return await recognizeWithKebbiMicrophone(purpose)"
-    )
+    assert source.count(prompt) == 1
+    assert "await speakAsync('請將受測者 QR Code 對準攝影機。');" in source
 
 
 def test_kebbi_microphone_is_preferred_with_c922_fallback():
@@ -130,21 +124,27 @@ def test_kebbi_microphone_is_preferred_with_c922_fallback():
     assert "if (isSpeechBusyError(error)) throw error;" in source
 
 
-def test_formal_name_flow_asks_for_direct_name_and_stops_without_manual_input():
+def test_formal_identity_flow_uses_server_side_qr_with_manual_name_fallback():
     source = INDEX_PATH.read_text(encoding="utf-8")
-    assert "只說您的姓名，例如王小明" in source
-    assert "ALLOW_MANUAL_NAME_FALLBACK" in source
-    assert "姓名辨識失敗，本次檢測已停止" in source
-    assert "語音服務仍在處理上一段錄音" in source
+    assert "startQrIdentityFlow" in source
+    assert "'/automation/qr-scan'" in source
+    assert "MANUAL_NAME_FALLBACK_DELAY_MS = 12000" in source
+    assert "QR 僅含受測者編號" in source
+    assert "以姓名備援確認" in source
+    assert "startIdentityConversation" not in source
+    assert "const fallbackTimer = setTimeout" in source
+    assert "'/automation/qr-scan', { method: 'POST' }, 2500" in source
+    assert "controller.abort()" in source
 
 
-def test_pc_rehearsal_mode_is_clearly_labeled_and_forces_c922_speech():
+def test_pc_rehearsal_mode_is_clearly_labeled_and_keeps_c922_qr_flow():
     source = INDEX_PATH.read_text(encoding="utf-8")
     control = (INDEX_PATH.parent / "control.html").read_text(encoding="utf-8")
     assert "PC_REHEARSAL_MODE" in source
     assert "電腦彩排模式" in source
     assert "不代表凱比實機測試完成" in source
-    assert "if (PC_REHEARSAL_MODE) return recognizeWithServer(purpose);" in source
+    assert "身分仍由電腦端 C922 掃描 QR Code" in source
+    assert "'/automation/qr-scan'" in source
     assert 'href="/?rehearsal=1"' in control
     assert "沒有凱比：開啟電腦彩排畫面" in control
 
@@ -166,3 +166,71 @@ def test_each_action_announces_end_before_advancing():
     assert "'結束': '/static/tts/end.mp3'" in source
     assert "setBanner(`${ACTION_LABEL[finishedActionId]}：結束`, 'ok')" in source
     assert "await speakAsync('結束', { minimumMs: 800 });" in source
+
+
+def test_result_page_includes_safe_rehabilitation_education():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "檢測後復健運動衛教" in source
+    assert "不是個別運動處方" in source
+    assert "穩固、無輪子的椅子" in source
+    assert "每週至少 2 天" in source
+    assert "平衡活動分散到每週 3 天以上" in source
+    assert "胸痛、嚴重呼吸困難、暈眩／快昏倒" in source
+    assert "renderRehabEducation(serverLevel || level, inferenceAvailable)" in source
+    assert "每公斤體重約 1.2g/天" not in source
+    assert "補充維生素 D" not in source
+
+
+def test_live_feedback_is_queued_instead_of_cutting_off_previous_speech():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "let liveSpeechChain = Promise.resolve();" in source
+    assert "function queueSpeech(text" in source
+    assert "liveSpeechChain = liveSpeechChain.then(() => speakAsync(text, options));" in source
+    assert "void queueSpeech(text);" in source
+    assert ".then(() => autoStopCurrentRecording('已完成目標次數'))" in source
+
+
+def test_sit_to_stand_counts_stable_seated_to_standing_transitions():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "const REP_TARGET = { sit: 5 };" in source
+    assert "SIT_SEATED_SCORE_MAX" in source
+    assert "SIT_STANDING_SCORE_MIN" in source
+    assert "SIT_STABLE_FRAMES = 2" in source
+    assert "candidate === 'up' && live.repState === 'down'" in source
+    assert "onRepCounted('sit', live.repCount)" in source
+    assert "REP_CALIB_WINDOW_SEC" not in source
+
+
+def test_walk_stops_at_a_stable_endpoint_displacement():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "走向地面標示的終點" in source
+    assert "WALK_TARGET_DISPLACEMENT = 0.16" in source
+    assert "WALK_TARGET_STABLE_FRAMES = 2" in source
+    assert "live.walkTargetFrames < WALK_TARGET_STABLE_FRAMES" in source
+    assert "autoStopCurrentRecording('已到達終點定位')" in source
+
+
+def test_squat_records_one_repetition_for_four_seconds():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "聽到開始後做一次半蹲" in source
+    assert "SQUAT_RECORD_MS = 4000" in source
+    assert "setTimeout(() =>" in source
+    assert "autoStopCurrentRecording('半蹲錄影 4 秒完成')" in source
+    assert "squat: 5" not in source
+    assert "[AUTOMATED_ACTIONS[2].prompt]: '/static/tts/squat_prompt.mp3'" not in source
+
+
+def test_upload_failure_reports_server_detail_instead_of_guessing_server_is_off():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "detail = (await res.json()).detail || detail" in source
+    assert "上傳或分析失敗" in source
+    assert "請確認後端伺服器是否已啟動" not in source
+
+
+def test_failed_or_skipped_inference_is_not_presented_as_low_risk():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "infer.status === 'success'" in source
+    assert "Number.isFinite(rawProbability)" in source
+    assert "inferenceAvailable ? `${pct}%` : '--'" in source
+    assert "renderRehabEducation(serverLevel || level, inferenceAvailable)" in source
+    assert "box.style.display = inferenceAvailable ? 'block' : 'none'" in source
