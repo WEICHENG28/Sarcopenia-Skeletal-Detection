@@ -92,9 +92,13 @@ class CameraHub:
             "-rtbufsize", "128M",
             "-video_size", "1280x720",
             "-framerate", "30",
+            # Ask DirectShow for the C922's native MJPEG stream. Keeping the
+            # original 720p frame avoids throwing away detail when the person
+            # must stand farther back for full-body framing.
+            "-vcodec", "mjpeg",
             "-i", f"video={CAMERA_NAME}",
             "-an",
-            "-vf", f"fps={self.fps},scale=960:-2",
+            "-vf", f"fps={self.fps}",
             "-c:v", "mjpeg",
             "-q:v", "5",
             "-f", "image2pipe",

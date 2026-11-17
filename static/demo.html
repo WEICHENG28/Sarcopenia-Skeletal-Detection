@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>身體功能篩檢｜展示模式</title>
+    <style>
+        :root { color-scheme: light; --ink:#24313d; --muted:#64748b; --line:#d9e0e7; --accent:#315c75; --paper:#f7f5ef; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:"Microsoft JhengHei",sans-serif; color:var(--ink); background:var(--paper); }
+        main { max-width:980px; margin:0 auto; padding:54px 28px 72px; }
+        .eyebrow { letter-spacing:.12em; color:var(--accent); font-weight:700; }
+        h1 { margin:12px 0 10px; font-size:clamp(34px,5vw,58px); line-height:1.1; }
+        .lead { max-width:760px; color:var(--muted); font-size:20px; line-height:1.7; }
+        .notice { margin:34px 0; padding:18px 22px; border-left:4px solid var(--accent); background:#fff; line-height:1.65; }
+        .steps { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+        .step { padding:26px 20px; min-height:170px; border-right:1px solid var(--line); }
+        .step:last-child { border-right:0; }
+        .number { color:var(--accent); font-size:14px; font-weight:800; letter-spacing:.08em; }
+        h2 { margin:9px 0; font-size:22px; }
+        p { line-height:1.65; }
+        .sample { margin-top:34px; display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+        .panel { padding:25px; background:#fff; border:1px solid var(--line); }
+        .panel strong { display:block; margin-bottom:10px; font-size:19px; }
+        footer { margin-top:36px; color:var(--muted); font-size:14px; }
+        @media(max-width:720px){ .steps,.sample{grid-template-columns:1fr}.step{border-right:0;border-bottom:1px solid var(--line)} }
+    </style>
+</head>
+<body>
+<main>
+    <div class="eyebrow">PUBLIC DEMONSTRATION</div>
+    <h1>身體功能風險篩檢流程</h1>
+    <p class="lead">本頁只用來展示專題概念與操作順序，不連接受測者名冊、不啟動攝影機，也不儲存影片或產生個人結果。</p>
+    <div class="notice"><strong>展示與正式收案已分離。</strong> 本系統提供的是動作與身體功能風險篩檢，不是肌少症診斷；正式判斷仍須結合握力、肌肉量及專業評估。</div>
+    <section class="steps" aria-label="展示流程">
+        <div class="step"><div class="number">01</div><h2>身分與入鏡</h2><p>正式版使用受測者編號 QR；展示版不使用真實姓名或資料。</p></div>
+        <div class="step"><div class="number">02</div><h2>三項動作</h2><p>五次起立坐下、行走至定位，以及一次半蹲。</p></div>
+        <div class="step"><div class="number">03</div><h2>篩檢與衛教</h2><p>呈現示意風險分層、安全提醒與一般性復健衛教。</p></div>
+    </section>
+    <section class="sample">
+        <div class="panel"><strong>示意結果</strong><p>動作資料品質：可分析<br>功能風險：示意中低區間<br>建議：持續活動；如起身或走路困難，接受專業評估。</p></div>
+        <div class="panel"><strong>不會在展示頁出現</strong><p>真實受測者資料、原始影片、治療師判讀、研究標籤，以及任何個人臨床診斷式結論。</p></div>
+    </section>
+    <footer>展示模式｜不寫入正式收案資料庫｜不可作為醫療診斷</footer>
+</main>
+</body>
+</html>

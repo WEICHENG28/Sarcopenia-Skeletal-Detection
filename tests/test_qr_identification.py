@@ -133,6 +133,19 @@ def test_camera_hub_rejects_stale_cached_frame():
     assert hub.get_frame(timeout=0.01, max_age_seconds=1.0) == b"old-jpeg"
 
 
+def test_camera_hub_preserves_native_720p_frame_for_distant_full_body_capture():
+    hub = object.__new__(CameraHub)
+    hub.ffmpeg = "ffmpeg"
+    hub.fps = 15
+
+    command = hub.capture_command()
+
+    assert command[command.index("-video_size") + 1] == "1280x720"
+    assert command[command.index("-vcodec") + 1] == "mjpeg"
+    assert command[command.index("-vf") + 1] == "fps=15"
+    assert not any("scale=" in argument for argument in command)
+
+
 def test_generated_test_qr_files_contain_only_expected_identifiers():
     output_dir = Path(__file__).resolve().parents[1] / "outputs" / "automation-qr"
     detector = cv2.QRCodeDetector()

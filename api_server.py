@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -30,8 +32,7 @@ from typing import Any, Dict, Literal
 from xml.etree import ElementTree
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -56,9 +57,11 @@ UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 VIDEOS_DIR = UPLOAD_DIR / "videos"
 JSON_DIR = UPLOAD_DIR / "json"
 RECORDS_CSV = UPLOAD_DIR / "records.csv"
+PROFESSIONAL_REVIEWS_PATH = UPLOAD_DIR / "professional_reviews.json"
 CAMERA_RECORDINGS_DIR = UPLOAD_DIR / "camera_recordings"
 ROSTER_PATH = BASE_DIR / "outputs" / "automation-roster" / "受測者名冊.xlsx"
 MAX_SPEECH_UPLOAD_BYTES = 5 * 1024 * 1024
+CLINICIAN_TOKEN = os.getenv("CLINICIAN_TOKEN", "").strip()
 
 EXTRACT_SCRIPT = BASE_DIR / "extract_to_json.py"
 STATIC_DIR = BASE_DIR / "static"
@@ -74,6 +77,14 @@ CSV_HEADERS = [
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_-]")
 _NAME_NOISE = re.compile(r"[\s,，.。．·・\-_/\\]+")
 _QR_PAYLOAD = re.compile(r"SARCOPENIA:([A-Za-z0-9_-]{1,64})")
+EXHIBITION_TTS_FILES = (
+    "manual_name.mp3", "ask_name.mp3", "profile_loaded.mp3",
+    "sit_prompt.mp3", "walk_prompt.mp3", "squat_prompt.mp3",
+    "sit_ready.mp3", "walk_ready.mp3", "squat_ready.mp3", "pose_ready.mp3",
+    "count_1.mp3", "count_2.mp3", "count_3.mp3", "count_4.mp3", "count_5.mp3",
+    "start.mp3", "end.mp3", "enter_frame.mp3", "hold.mp3", "good.mp3",
+    "complete_5.mp3", "movement_stopped.mp3", "analysis.mp3",
+)
 _ROSTER_HEADERS = {
     "participant_id", "name", "name_aliases", "age",
     "height_cm", "weight_kg", "gender", "enabled",
@@ -99,9 +110,26 @@ class ParticipantSelection(BaseModel):
 
 class AutomationFailure(BaseModel):
     message: str = Field(min_length=1, max_length=200)
+    expected_state: Literal[
+        "armed", "scanning_qr", "profile_loaded", "testing", "completed"
+    ]
+    expected_revision: int = Field(ge=0)
+    participant_id: str | None = Field(default=None, max_length=64)
+
+
+class ClinicianReviewRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=64)
+    assessment: Literal[
+        "insufficient",
+        "screen_negative",
+        "possible_sarcopenia",
+        "refer_for_confirmation",
+    ]
+    note: str = Field(default="", max_length=500)
 
 
 _automation_lock = threading.Lock()
+_professional_review_lock = threading.Lock()
 _automation_state: Dict[str, Any] = {
     "revision": 0,
     "state": "idle",
@@ -145,6 +173,17 @@ def _set_automation_state_if_current(
 def get_automation_state() -> Dict[str, Any]:
     with _automation_lock:
         return dict(_automation_state)
+
+
+def require_clinician_token(
+    x_clinician_token: str | None = Header(default=None, alias="X-Clinician-Token"),
+) -> None:
+    """Fail closed unless an explicit local clinician token is configured."""
+    if not CLINICIAN_TOKEN:
+        raise HTTPException(503, "專業判讀後台尚未設定 CLINICIAN_TOKEN")
+    supplied = x_clinician_token or ""
+    if not secrets.compare_digest(supplied, CLINICIAN_TOKEN):
+        raise HTTPException(401, "判讀權杖無效")
 
 
 def normalize_spoken_name(value: str) -> str:
@@ -291,6 +330,63 @@ def init_storage() -> None:
         )
 
 
+def _load_professional_reviews() -> Dict[str, Dict[str, str]]:
+    if not PROFESSIONAL_REVIEWS_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(PROFESSIONAL_REVIEWS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(500, "專業判讀紀錄無法讀取") from exc
+    if not isinstance(raw, dict):
+        raise HTTPException(500, "專業判讀紀錄格式錯誤")
+    return raw
+
+
+def _write_professional_reviews(reviews: Dict[str, Dict[str, str]]) -> None:
+    PROFESSIONAL_REVIEWS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = PROFESSIONAL_REVIEWS_PATH.with_suffix(".json.tmp")
+    try:
+        temporary_path.write_text(
+            json.dumps(reviews, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary_path.replace(PROFESSIONAL_REVIEWS_PATH)
+    except OSError as exc:
+        temporary_path.unlink(missing_ok=True)
+        raise HTTPException(500, "專業判讀紀錄無法儲存") from exc
+
+
+def _clinician_record_summaries() -> list[Dict[str, Any]]:
+    if not RECORDS_CSV.exists() or RECORDS_CSV.stat().st_size == 0:
+        return []
+    try:
+        frame = pd.read_csv(RECORDS_CSV, encoding="utf-8-sig", dtype=str).fillna("")
+    except Exception as exc:
+        raise HTTPException(500, "收案紀錄無法讀取") from exc
+    if "user_id" not in frame.columns or "action" not in frame.columns:
+        raise HTTPException(500, "收案紀錄缺少必要欄位")
+
+    reviews = _load_professional_reviews()
+    records: list[Dict[str, Any]] = []
+    for participant_id in sorted(set(frame["user_id"].astype(str))):
+        if not participant_id:
+            continue
+        participant_rows = frame[frame["user_id"].astype(str) == participant_id]
+        completed = [
+            action for action in ACTIONS
+            if action in set(participant_rows["action"].astype(str))
+        ]
+        review = reviews.get(participant_id, {})
+        records.append({
+            "participant_id": participant_id,
+            "completed_actions": completed,
+            "professional_review": review.get("assessment", ""),
+            "review_note": review.get("note", ""),
+            "reviewed_at": review.get("reviewed_at", ""),
+        })
+    return records
+
+
 def find_user_action_jsons(user_id: str) -> Dict[str, str]:
     """找出該受測者已完成的動作骨架檔。"""
     found: Dict[str, str] = {}
@@ -366,13 +462,6 @@ app = FastAPI(title="肌少症篩檢 API", version="2.0")
 camera = CameraHub(CAMERA_RECORDINGS_DIR)
 speech_recognizer = OfflineSpeechRecognizer(find_ffmpeg())
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
@@ -402,6 +491,62 @@ def serve_control():
         str(STATIC_DIR / "control.html"),
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
+
+
+@app.get("/demo")
+def serve_demo():
+    """Public, inert concept page without roster, camera, or result access."""
+    return FileResponse(
+        str(STATIC_DIR / "demo.html"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
+@app.get("/clinician")
+def serve_clinician():
+    """Clinician UI; its data APIs separately require the configured token."""
+    return FileResponse(
+        str(STATIC_DIR / "clinician.html"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
+@app.get("/clinician/records")
+def clinician_records(
+    _authorized: None = Depends(require_clinician_token),
+) -> Dict[str, Any]:
+    return {"records": _clinician_record_summaries()}
+
+
+@app.post("/clinician/review")
+def save_clinician_review(
+    review: ClinicianReviewRequest,
+    _authorized: None = Depends(require_clinician_token),
+) -> Dict[str, Any]:
+    safe_participant_id = sanitize_filename_component(review.participant_id)
+    if safe_participant_id != review.participant_id:
+        raise HTTPException(400, "受測者編號格式不符")
+    known_ids = {
+        item["participant_id"] for item in _clinician_record_summaries()
+    }
+    if safe_participant_id not in known_ids:
+        raise HTTPException(404, "正式收案紀錄中找不到此受測者")
+
+    reviewed_at = datetime.now().isoformat(timespec="seconds")
+    with _professional_review_lock:
+        reviews = _load_professional_reviews()
+        reviews[safe_participant_id] = {
+            "assessment": review.assessment,
+            "note": review.note.strip(),
+            "reviewed_at": reviewed_at,
+        }
+        _write_professional_reviews(reviews)
+    return {
+        "status": "success",
+        "participant_id": safe_participant_id,
+        "assessment": review.assessment,
+        "reviewed_at": reviewed_at,
+    }
 
 
 @app.get("/participants/status")
@@ -521,7 +666,9 @@ def start_automation() -> Dict[str, Any]:
         raise HTTPException(409, f"無法啟動：{roster['message']}")
     if camera.get_frame(timeout=0.5) is None:
         raise HTTPException(409, "無法啟動：C922 尚未產生畫面")
-    return _set_automation_state("armed", "已啟動，等待受測者完整入鏡")
+    # QR scanning starts immediately and stays silent. Full-body framing is
+    # intentionally deferred until after identity has been confirmed.
+    return _set_automation_state("scanning_qr", "已啟動 QR Code 掃描")
 
 
 @app.post("/automation/stop")
@@ -539,7 +686,13 @@ def automation_person_detected() -> Dict[str, Any]:
     current = get_automation_state()
     if current["state"] != "armed":
         return current
-    return _set_automation_state("scanning_qr", "已偵測到受測者，請將 QR Code 對準 C922")
+    state = _set_automation_state_if_current(
+        "armed",
+        current["revision"],
+        "scanning_qr",
+        "已偵測到受測者，請將 QR Code 對準 C922",
+    )
+    return state or get_automation_state()
 
 
 @app.post("/automation/qr-scan")
@@ -583,7 +736,7 @@ def automation_qr_scan() -> Dict[str, Any]:
         "scanning_qr",
         current["revision"],
         "profile_loaded",
-        f"QR Code 已確認 {profile['name']}，準備開始動作測試",
+        f"QR Code 已確認 {profile['name']}，請退後並讓全身完整入鏡",
         profile,
     )
     if state is None:
@@ -615,7 +768,7 @@ def automation_profile_loaded(selection: ParticipantSelection) -> Dict[str, Any]
         "scanning_qr",
         current["revision"],
         "profile_loaded",
-        f"已由姓名備援確認 {profile['name']}，準備開始動作測試",
+        f"已由姓名備援確認 {profile['name']}，請退後並讓全身完整入鏡",
         profile,
     )
     if state is None:
@@ -626,20 +779,57 @@ def automation_profile_loaded(selection: ParticipantSelection) -> Dict[str, Any]
 @app.post("/automation/testing")
 def automation_testing(selection: ParticipantSelection) -> Dict[str, Any]:
     current = get_automation_state()
-    if not current.get("participant") or current["participant"]["participant_id"] != selection.participant_id:
+    if (current["state"] != "profile_loaded" or not current.get("participant")
+            or current["participant"]["participant_id"] != selection.participant_id):
         raise HTTPException(409, "尚未完成受測者確認")
-    return _set_automation_state("testing", "自動動作測試進行中", current["participant"])
+    state = _set_automation_state_if_current(
+        "profile_loaded",
+        current["revision"],
+        "testing",
+        "自動動作測試進行中",
+        current["participant"],
+    )
+    if state is None:
+        raise HTTPException(409, "自動流程已停止或重新啟動，無法開始動作測試")
+    return state
 
 
 @app.post("/automation/completed")
 def automation_completed(selection: ParticipantSelection) -> Dict[str, Any]:
     current = get_automation_state()
-    return _set_automation_state("completed", "三項錄影已完成，正在分析或顯示結果", current.get("participant"))
+    participant = current.get("participant")
+    if (current["state"] != "testing" or not participant
+            or participant["participant_id"] != selection.participant_id):
+        raise HTTPException(409, "目前沒有此受測者正在進行的自動測試")
+    state = _set_automation_state_if_current(
+        "testing",
+        current["revision"],
+        "completed",
+        "三項錄影已完成，正在分析或顯示結果",
+        participant,
+    )
+    if state is None:
+        raise HTTPException(409, "自動流程已停止或重新啟動，忽略完成訊號")
+    return state
 
 
 @app.post("/automation/failed")
 def automation_failed(failure: AutomationFailure) -> Dict[str, Any]:
-    return _set_automation_state("error", failure.message)
+    current = get_automation_state()
+    participant = current.get("participant")
+    if failure.participant_id is not None:
+        if not participant or participant["participant_id"] != failure.participant_id:
+            raise HTTPException(409, "失敗回報不屬於目前受測者")
+    state = _set_automation_state_if_current(
+        failure.expected_state,
+        failure.expected_revision,
+        "error",
+        failure.message,
+        participant,
+    )
+    if state is None:
+        raise HTTPException(409, "自動流程狀態已改變，忽略過期的失敗回報")
+    return state
 
 
 @app.get("/health")
@@ -662,6 +852,67 @@ def health() -> Dict[str, Any]:
         "speech": speech_recognizer.status(),
         "roster": participant_roster_status(),
         "automation": get_automation_state(),
+    }
+
+
+@app.get("/exhibition/preflight")
+def exhibition_preflight() -> Dict[str, Any]:
+    """Return the minimum, privacy-safe checks required before an exhibit run."""
+    snapshot = health()
+    roster = snapshot["roster"]
+    speech = snapshot["speech"]
+    tts_dir = STATIC_DIR / "tts"
+    missing_tts = [
+        filename for filename in EXHIBITION_TTS_FILES
+        if not (tts_dir / filename).is_file() or (tts_dir / filename).stat().st_size < 1_000
+    ]
+    required_frontend = ("index.html", "sit_to_stand_counter.js", "action_readiness.js")
+    missing_frontend = [
+        filename for filename in required_frontend
+        if not (STATIC_DIR / filename).is_file()
+    ]
+    checks = [
+        {
+            "id": "models", "label": "AI 模型", "required": True,
+            "ok": not snapshot["missing_files"],
+            "detail": "模型檔完整" if not snapshot["missing_files"]
+            else f"缺少：{', '.join(snapshot['missing_files'])}",
+        },
+        {
+            "id": "camera", "label": "C922 畫面", "required": True,
+            "ok": bool(snapshot["camera_ready"]),
+            "detail": snapshot["camera"] if snapshot["camera_ready"] else "尚未取得即時畫面",
+        },
+        {
+            "id": "roster", "label": "受測者名冊", "required": True,
+            "ok": bool(roster.get("ready")), "detail": roster.get("message", ""),
+        },
+        {
+            "id": "frontend", "label": "時機偵測程式", "required": True,
+            "ok": not missing_frontend,
+            "detail": "流程與計次模組完整" if not missing_frontend
+            else f"缺少：{', '.join(missing_frontend)}",
+        },
+        {
+            "id": "tts", "label": "繁體中文預錄語音", "required": True,
+            "ok": not missing_tts,
+            "detail": f"{len(EXHIBITION_TTS_FILES)} 段提示音完整" if not missing_tts
+            else f"缺少或無效：{', '.join(missing_tts)}",
+        },
+        {
+            "id": "speech", "label": "姓名語音備援", "required": False,
+            "ok": bool(speech.get("available")),
+            "detail": speech.get("message", ""),
+        },
+    ]
+    blockers = [check["detail"] for check in checks if check["required"] and not check["ok"]]
+    warnings = [check["detail"] for check in checks if not check["required"] and not check["ok"]]
+    return {
+        "ready": not blockers,
+        "checks": checks,
+        "blockers": blockers,
+        "warnings": warnings,
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
     }
 
 
@@ -826,7 +1077,8 @@ async def upload_data(
 
 @app.get("/result/{user_id}")
 def get_result(user_id: str, age: float, height_cm: float,
-               weight_kg: float, gender: str = "") -> Dict[str, Any]:
+               weight_kg: float, gender: str = "",
+               _authorized: None = Depends(require_clinician_token)) -> Dict[str, Any]:
     """以現有骨架檔重新評估，不需重新上傳影片。"""
     safe_user = sanitize_filename_component(user_id)
     return {
@@ -839,8 +1091,12 @@ def get_result(user_id: str, age: float, height_cm: float,
 
 
 @app.post("/label/")
-async def save_label(user_id: str = Form(...), label: int = Form(...)):
-    """治療師標記診斷結果，寫回該受測者的所有紀錄。"""
+async def save_label(
+    user_id: str = Form(...),
+    label: int = Form(...),
+    _authorized: None = Depends(require_clinician_token),
+):
+    """Legacy binary label endpoint; retained only for authenticated migration."""
     if label not in (0, 1):
         raise HTTPException(400, "label 必須為 0 或 1")
 

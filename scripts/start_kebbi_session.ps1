@@ -83,7 +83,7 @@ if (-not $NoAdb) {
         $deviceLines = & $adbExe devices | Select-String -Pattern "^\S+\s+device$"
         if ($deviceLines.Count -eq 1) {
             & $adbExe reverse tcp:8000 tcp:8000 | Out-Null
-            & $adbExe shell am start -a android.intent.action.VIEW -d "http://127.0.0.1:8000/" | Out-Null
+            & $adbExe shell am start -a android.intent.action.VIEW -d "http://127.0.0.1:8000/?kebbi=1" | Out-Null
             Write-Host "凱比已連線，已設定 ADB reverse 並開啟正式檢測頁。"
         } elseif ($deviceLines.Count -eq 0) {
             Write-Warning "目前沒有偵測到凱比。請開機並接上 USB 後，再執行 start_kebbi.bat。"

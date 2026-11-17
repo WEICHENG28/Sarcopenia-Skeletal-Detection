@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 INDEX_PATH = Path(__file__).resolve().parents[1] / "static" / "index.html"
+COUNTER_PATH = INDEX_PATH.parent / "sit_to_stand_counter.js"
 TTS_PATH = INDEX_PATH.parent / "tts"
 
 
@@ -22,11 +23,12 @@ def test_simulation_does_not_force_short_timeout_on_long_action_prompts():
     assert "await speakAsync(action.prompt, { timeoutMs: 5000 });" not in source
 
 
-def test_profile_loaded_state_can_resume_after_page_reload():
+def test_profile_loaded_state_waits_for_full_body_after_page_reload():
     source = INDEX_PATH.read_text(encoding="utf-8")
     assert "state.state === 'profile_loaded' && state.participant" in source
     assert "loadParticipantIntoForm(state.participant)" in source
-    assert "beginAutomatedTests(state.participant)" in source
+    assert "不可直接跳進動作測試" in source
+    assert "void beginAutomatedTests(automationServerState.participant);" in source
 
 
 def test_kebbi_page_requests_screen_wake_lock_and_polls_on_resume():
@@ -35,6 +37,21 @@ def test_kebbi_page_requests_screen_wake_lock_and_polls_on_resume():
     assert "document.addEventListener('visibilitychange'" in source
     assert "ensureScreenWakeLock();" in source
     assert "pollAutomationState();" in source
+
+
+def test_kebbi_mode_attempts_audio_automatically_with_tap_fallback():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    launcher = (INDEX_PATH.parents[1] / "scripts" / "start_kebbi_session.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "const KEBBI_MODE = PAGE_PARAMS.get('kebbi') === '1';" in source
+    assert 'id="audioUnlockOverlay"' in source
+    assert "if (KEBBI_MODE) void attemptKebbiAudioAutostart();" in source
+    assert "async function attemptKebbiAudioAutostart()" in source
+    assert "async function enableKebbiAudio(button, automatic = false)" in source
+    assert "await confirmation.play();" in source
+    assert "if (!kebbiAudioReady)" in source
+    assert "http://127.0.0.1:8000/?kebbi=1" in launcher
 
 
 def test_only_visible_kebbi_tab_controls_automation():
@@ -58,6 +75,10 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
         "sit_prompt.mp3",
         "walk_prompt.mp3",
         "squat_prompt.mp3",
+        "sit_ready.mp3",
+        "walk_ready.mp3",
+        "squat_ready.mp3",
+        "pose_ready.mp3",
         "count_1.mp3",
         "count_2.mp3",
         "count_3.mp3",
@@ -90,7 +111,7 @@ def test_robot_speech_is_suppressed_while_c922_is_listening():
     assert "POST_TTS_LISTEN_DELAY_MS" in source
     assert "speechCaptureActive = true" in source
     assert "if (speechCaptureActive || !speechEnabled" in source
-    assert "currentRecordingActionId || automationServerState.state === 'armed'" in source
+    assert "currentRecordingActionId || automationServerState.state === 'profile_loaded'" in source
 
 
 def test_kebbi_listening_starts_promptly_and_beeps_after_recorder_start():
@@ -108,7 +129,7 @@ def test_name_speech_prompt_is_not_invoked_by_formal_identity_flow():
     prompt = "您好，請在嗶聲後，只說您的姓名，例如王小明。"
     assert f"'{prompt}': '/static/tts/ask_name.mp3?v=2'" in source
     assert source.count(prompt) == 1
-    assert "await speakAsync('請將受測者 QR Code 對準攝影機。');" in source
+    assert "await speakAsync('請將受測者 QR Code 對準攝影機。');" not in source
 
 
 def test_kebbi_microphone_is_preferred_with_c922_fallback():
@@ -135,6 +156,13 @@ def test_formal_identity_flow_uses_server_side_qr_with_manual_name_fallback():
     assert "const fallbackTimer = setTimeout" in source
     assert "'/automation/qr-scan', { method: 'POST' }, 2500" in source
     assert "controller.abort()" in source
+
+
+def test_new_qr_cycle_clears_previous_participant_before_scanning():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "state.state === 'scanning_qr'" in source
+    assert "if (previousState !== 'scanning_qr') prepareAutomationCycle();" in source
+    assert "避免展場畫面" in source
 
 
 def test_pc_rehearsal_mode_is_clearly_labeled_and_keeps_c922_qr_flow():
@@ -170,12 +198,16 @@ def test_each_action_announces_end_before_advancing():
 
 def test_result_page_includes_safe_rehabilitation_education():
     source = INDEX_PATH.read_text(encoding="utf-8")
-    assert "檢測後復健運動衛教" in source
+    assert "檢測後一般活動與防跌衛教" in source
     assert "不是個別運動處方" in source
     assert "穩固、無輪子的椅子" in source
     assert "每週至少 2 天" in source
-    assert "平衡活動分散到每週 3 天以上" in source
-    assert "胸痛、嚴重呼吸困難、暈眩／快昏倒" in source
+    assert "每週 3 天以上為一般目標" in source
+    assert "胸痛／胸悶" in source
+    assert "緊急時撥 119" in source
+    assert "同一肌群兩次間至少休息 1 天" in source
+    assert "無法達到一般建議量時" in source
+    assert "rehabNextStep" in source
     assert "renderRehabEducation(serverLevel || level, inferenceAvailable)" in source
     assert "每公斤體重約 1.2g/天" not in source
     assert "補充維生素 D" not in source
@@ -192,13 +224,26 @@ def test_live_feedback_is_queued_instead_of_cutting_off_previous_speech():
 
 def test_sit_to_stand_counts_stable_seated_to_standing_transitions():
     source = INDEX_PATH.read_text(encoding="utf-8")
+    counter = COUNTER_PATH.read_text(encoding="utf-8")
     assert "const REP_TARGET = { sit: 5 };" in source
-    assert "SIT_SEATED_SCORE_MAX" in source
-    assert "SIT_STANDING_SCORE_MIN" in source
-    assert "SIT_STABLE_FRAMES = 2" in source
-    assert "candidate === 'up' && live.repState === 'down'" in source
-    assert "onRepCounted('sit', live.repCount)" in source
+    assert '<script src="/static/sit_to_stand_counter.js"></script>' in source
+    assert "SitToStandCounter.computeMetrics(landmarks)" in source
+    assert "onRepCounted('sit', result.repCount)" in source
+    assert "stableFrames: 2" in counter
+    assert "standingKneeMin: 150" in counter
+    assert "standingRiseTorso: 0.22" in counter
+    assert "calibrationSeatedThighMin: 0.18" in counter
+    assert "state.smoothedThighHorizontalTorso" in counter
+    assert "candidate === 'up' && state.phase === 'down'" in counter
+    assert "state.baselineKneeAngle" in counter
     assert "REP_CALIB_WINDOW_SEC" not in source
+
+
+def test_sit_to_stand_allows_one_visible_ankle_after_full_body_entry_check():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "handleAutomationPresence(presenceFramingOk, nowSec)" in source
+    assert "checkSitToStandFraming(landmarks)" in source
+    assert ".some(i => landmarkIsInFrame(landmarks[i]))" in source
 
 
 def test_walk_stops_at_a_stable_endpoint_displacement():
@@ -217,7 +262,40 @@ def test_squat_records_one_repetition_for_four_seconds():
     assert "setTimeout(() =>" in source
     assert "autoStopCurrentRecording('半蹲錄影 4 秒完成')" in source
     assert "squat: 5" not in source
-    assert "[AUTOMATED_ACTIONS[2].prompt]: '/static/tts/squat_prompt.mp3'" not in source
+    assert "[AUTOMATED_ACTIONS[2].prompt]: '/static/tts/squat_prompt.mp3'" in source
+
+
+def test_each_action_waits_for_pose_readiness_before_countdown():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    readiness = (INDEX_PATH.parent / "action_readiness.js").read_text(encoding="utf-8")
+    assert '<script src="/static/action_readiness.js"></script>' in source
+    assert "await speakAsync(step.readyPrompt" in source
+    assert "const ready = await waitForActionReadiness(step, token);" in source
+    assert source.index("const ready = await waitForActionReadiness(step, token);") < source.index(
+        "for (let count = 3; count >= 1; count--)"
+    )
+    assert "updatePendingActionReadiness(landmarks);" in source
+    assert "READINESS_OVERRIDE_DELAY_MS = 12000" in source
+    assert 'onclick="confirmActionReadiness()"' in source
+    assert "stableFrames: 5" in readiness
+    assert "seatedKneeMax: 155" in readiness
+    assert "standingKneeMin: 150" in readiness
+
+
+def test_flow_timeline_covers_identity_motion_and_result_stages():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    for label in [">QR<", ">入鏡<", ">坐站<", ">行走<", ">半蹲<", ">結果<"]:
+        assert label in source
+    assert "function updateFlowTimeline" in source
+    assert "aria-current" in source
+
+
+def test_control_console_blocks_start_until_exhibition_preflight_passes():
+    control = (INDEX_PATH.parent / "control.html").read_text(encoding="utf-8")
+    assert "展場預檢" in control
+    assert "api('/exhibition/preflight')" in control
+    assert "!preflight.ready || busy" in control
+    assert "if (!preflightReady)" in control
 
 
 def test_upload_failure_reports_server_detail_instead_of_guessing_server_is_off():

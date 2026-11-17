@@ -3,6 +3,13 @@ __pycache__/
 *.pyc
 node_modules/
 .artifact-preview/
+.pytest_cache/
+tmp/
+
+# 本機產生的簡報／彩排輸出；正式 QR 與名冊範本仍保留版控
+outputs/competition-figures*/
+outputs/competition-figures*.png
+outputs/rehab-education-screen.html
 
 # 伺服器上傳的資料（不進版控，含真實個案影片）
 data/uploads/

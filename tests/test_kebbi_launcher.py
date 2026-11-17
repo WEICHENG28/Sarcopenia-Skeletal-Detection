@@ -12,7 +12,7 @@ def test_one_click_launcher_starts_hidden_server_and_opens_kebbi_flow():
     assert "-WindowStyle Hidden" in script
     assert '"http://127.0.0.1:8000/health"' in script
     assert "reverse tcp:8000 tcp:8000" in script
-    assert '"http://127.0.0.1:8000/"' in script
+    assert '"http://127.0.0.1:8000/?kebbi=1"' in script
     assert 'Start-Process "http://localhost:8000/control"' in script
 
 
