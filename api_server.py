@@ -45,7 +45,7 @@ if str(BASE_DIR) not in sys.path:
 from src.dataset_manifest import ACTIONS
 from src.predict import predict
 from speech_recognition_service import OfflineSpeechRecognizer, SpeechRecognitionError
-from webcam_capture import CAMERA_NAME, CameraHub, find_ffmpeg
+from webcam_capture import CAMERA_NAME, CameraHub
 
 logger = logging.getLogger("sarcopenia.speech")
 
@@ -460,7 +460,7 @@ def run_inference(user_id: str, age: float, height_cm: float,
 
 app = FastAPI(title="肌少症篩檢 API", version="2.0")
 camera = CameraHub(CAMERA_RECORDINGS_DIR)
-speech_recognizer = OfflineSpeechRecognizer(find_ffmpeg())
+speech_recognizer = OfflineSpeechRecognizer(camera.ffmpeg)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

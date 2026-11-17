@@ -48,7 +48,7 @@ def decode_qr_payloads(jpeg_frame: bytes) -> list[str]:
     return list(dict.fromkeys(decoded))
 
 
-def find_ffmpeg() -> str:
+def find_ffmpeg(*, required: bool = True) -> str | None:
     configured = os.getenv("FFMPEG_PATH")
     candidates = [
         Path(configured) if configured else None,
@@ -59,14 +59,19 @@ def find_ffmpeg() -> str:
     for candidate in candidates:
         if candidate and candidate.is_file():
             return str(candidate)
-    raise RuntimeError("找不到 FFmpeg；請設定 FFMPEG_PATH。")
+    if required:
+        raise RuntimeError("找不到 FFmpeg；請設定 FFMPEG_PATH。")
+    return None
 
 
 class CameraHub:
     """Capture one Windows webcam and share frames with preview and recorder."""
 
     def __init__(self, recordings_dir: Path, fps: int = 15) -> None:
-        self.ffmpeg = find_ffmpeg()
+        # Keep module import and non-hardware unit tests usable on machines
+        # without FFmpeg. Exhibition preflight will still block formal startup
+        # because no live C922 frame can be produced.
+        self.ffmpeg = find_ffmpeg(required=False)
         self.recordings_dir = recordings_dir
         self.fps = fps
         self.condition = threading.Condition()
@@ -85,6 +90,8 @@ class CameraHub:
         self.qr_decode_lock = threading.Lock()
 
     def capture_command(self) -> list[str]:
+        if not self.ffmpeg:
+            raise RuntimeError("找不到 FFmpeg；請設定 FFMPEG_PATH。")
         return [
             self.ffmpeg,
             "-hide_banner", "-loglevel", "error",
@@ -107,6 +114,8 @@ class CameraHub:
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
+            return
+        if not self.ffmpeg:
             return
         self.stop_event.clear()
         self.thread = threading.Thread(
@@ -231,6 +240,8 @@ class CameraHub:
             )
 
     def start_recording(self) -> str:
+        if not self.ffmpeg:
+            raise RuntimeError("找不到 FFmpeg；請設定 FFMPEG_PATH。")
         if self.get_frame(timeout=3) is None:
             raise RuntimeError("C922 尚未產生畫面")
 

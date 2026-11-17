@@ -39,7 +39,7 @@ class OfflineSpeechRecognizer:
 
     def __init__(
         self,
-        ffmpeg: str,
+        ffmpeg: str | None,
         microphone_name: str = MICROPHONE_NAME,
         model_name: str = WHISPER_MODEL_NAME,
         model_factory: Callable[..., Any] | None = None,
@@ -57,6 +57,14 @@ class OfflineSpeechRecognizer:
         return self._model is not None
 
     def status(self) -> dict[str, Any]:
+        if not self.ffmpeg:
+            return {
+                "available": False,
+                "model": self.model_name,
+                "model_loaded": self.model_loaded,
+                "microphone": self.microphone_name,
+                "message": "找不到 FFmpeg；姓名語音備援無法使用",
+            }
         try:
             if self._model_factory is None:
                 from faster_whisper import WhisperModel  # noqa: F401
@@ -74,6 +82,8 @@ class OfflineSpeechRecognizer:
         }
 
     def capture_command(self, destination: Path, duration_seconds: float) -> list[str]:
+        if not self.ffmpeg:
+            raise SpeechRecognitionError("找不到 FFmpeg；無法使用麥克風收音")
         return [
             self.ffmpeg,
             "-hide_banner", "-loglevel", "error", "-y",
@@ -259,6 +269,8 @@ class OfflineSpeechRecognizer:
         }
 
     def _convert_uploaded_audio(self, source: Path, destination: Path) -> None:
+        if not self.ffmpeg:
+            raise SpeechRecognitionError("找不到 FFmpeg；無法處理凱比麥克風音訊")
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             completed = subprocess.run(

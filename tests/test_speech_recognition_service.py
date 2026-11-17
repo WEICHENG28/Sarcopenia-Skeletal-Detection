@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from speech_recognition_service import OfflineSpeechRecognizer
+from speech_recognition_service import OfflineSpeechRecognizer, SpeechRecognitionError
 
 
 class FakeSegment:
@@ -33,6 +33,21 @@ def test_capture_command_uses_c922_mic_and_private_pcm_wav(tmp_path):
     assert command[command.index("-ac") + 1] == "1"
     assert command[command.index("-ar") + 1] == "16000"
     assert command[-1] == str(destination)
+
+
+def test_missing_ffmpeg_is_reported_without_crashing_import(tmp_path):
+    recognizer = OfflineSpeechRecognizer(None)
+
+    status = recognizer.status()
+
+    assert status["available"] is False
+    assert "FFmpeg" in status["message"]
+    try:
+        recognizer.capture_command(tmp_path / "speech.wav", 4.5)
+    except SpeechRecognitionError as exc:
+        assert "FFmpeg" in str(exc)
+    else:
+        raise AssertionError("missing FFmpeg must block microphone capture")
 
 
 def test_kebbi_prompt_echo_is_not_treated_as_a_name():
