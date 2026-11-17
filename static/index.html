@@ -639,6 +639,12 @@
         const ACTION_LABEL = { sit: "起立坐下", walk: "走三公尺", squat: "半蹲" };
 
         // ── 顯示電腦端 C922 畫面 ──────────────────────────────────
+        function loadNextWebcamFrame() {
+            if (!isActiveAutomationTab || NO_HARDWARE_SIMULATION_MODE) return;
+            document.getElementById('webcam').src =
+                `${API_BASE}/camera/frame.jpg?t=${Date.now()}`;
+        }
+
         // 凱比瀏覽器無法直接讀取接在 Windows 電腦上的 USB 攝影機，
         // 因此由同一台 FastAPI 伺服器提供逐格 JPEG 預覽。
         window.onload = function() {
@@ -659,17 +665,13 @@
                 return;
             }
             if (KEBBI_MODE) void attemptKebbiAudioAutostart();
-            const loadNextFrame = () => {
-                if (!isActiveAutomationTab) return;
-                webcam.src = `${API_BASE}/camera/frame.jpg?t=${Date.now()}`;
-            };
             webcam.onload = () => {
-                if (isActiveAutomationTab) setTimeout(loadNextFrame, 35);
+                if (isActiveAutomationTab) setTimeout(loadNextWebcamFrame, 35);
             };
             webcam.onerror = () => {
-                if (isActiveAutomationTab) setTimeout(loadNextFrame, 500);
+                if (isActiveAutomationTab) setTimeout(loadNextWebcamFrame, 500);
             };
-            loadNextFrame();
+            loadNextWebcamFrame();
             initPoseTracking();
             ensureScreenWakeLock();
             pollAutomationState();
@@ -736,7 +738,8 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                claimAutomationTab();
+                // 切到背景時逐格預覽會停止；回到前景要重新啟動，否則畫面與骨架偵測都會凍結。
+                if (claimAutomationTab()) loadNextWebcamFrame();
                 ensureScreenWakeLock();
                 pollAutomationState();
             } else {

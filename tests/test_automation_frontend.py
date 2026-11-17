@@ -335,3 +335,9 @@ def test_statement_level_calls_only_use_defined_functions():
         "reject", "resolve", "setInterval", "setTimeout",
     }
     assert called - defined - browser_globals == set()
+
+
+def test_webcam_preview_restarts_when_page_becomes_visible_again():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "function loadNextWebcamFrame()" in source
+    assert "if (claimAutomationTab()) loadNextWebcamFrame();" in source
