@@ -866,7 +866,12 @@ def exhibition_preflight() -> Dict[str, Any]:
         filename for filename in EXHIBITION_TTS_FILES
         if not (tts_dir / filename).is_file() or (tts_dir / filename).stat().st_size < 1_000
     ]
-    required_frontend = ("index.html", "sit_to_stand_counter.js", "action_readiness.js")
+    required_frontend = (
+        "index.html",
+        "kebbi.html",
+        "sit_to_stand_counter.js",
+        "action_readiness.js",
+    )
     missing_frontend = [
         filename for filename in required_frontend
         if not (STATIC_DIR / filename).is_file()

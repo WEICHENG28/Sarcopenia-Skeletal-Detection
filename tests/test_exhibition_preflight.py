@@ -1,6 +1,13 @@
 import api_server
 
 
+def test_legacy_kebbi_launcher_redirects_to_formal_flow():
+    source = (api_server.STATIC_DIR / "kebbi.html").read_text(encoding="utf-8")
+
+    assert "window.location.replace('/?kebbi=1')" in source
+    assert "url=/?kebbi=1" in source
+
+
 def test_exhibition_preflight_requires_camera_models_roster_frontend_and_tts(monkeypatch):
     monkeypatch.setattr(api_server.camera, "get_frame", lambda timeout=0.1: b"jpeg")
     monkeypatch.setattr(
