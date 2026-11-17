@@ -91,6 +91,8 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
         "good.mp3",
         "complete_5.mp3",
         "movement_stopped.mp3",
+        "squat_recorded.mp3",
+        "walk_arrived.mp3",
         "analysis.mp3",
     }
     assert {path.name for path in TTS_PATH.glob("*.mp3")} == expected

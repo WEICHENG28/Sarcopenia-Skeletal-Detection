@@ -34,6 +34,8 @@ PROMPTS = {
     "good.mp3": "很好",
     "complete_5.mp3": "已完成五下，錄影即將結束。",
     "movement_stopped.mp3": "偵測到動作已停止，錄影即將結束。",
+    "squat_recorded.mp3": "半蹲動作已記錄，錄影即將結束。",
+    "walk_arrived.mp3": "已到達終點，錄影即將結束。",
     "analysis.mp3": "三項動作已完成，正在進行分析，請稍候。",
 }
 
