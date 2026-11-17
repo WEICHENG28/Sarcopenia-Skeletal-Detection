@@ -139,7 +139,9 @@ MediaPipe Pose 的 **world landmarks**，每幀 33 個關節點：
   "warnings": [
     "僅完成 2/3 項動作（缺 Squat），評估結果的不確定性較高"
   ],
-  "message": "評估完成"
+  "message": "評估完成",
+  "uncertain": false,
+  "uncertainty_reasons": []
 }
 ```
 
@@ -155,6 +157,8 @@ MediaPipe Pose 的 **world landmarks**，每幀 33 個關節點：
 | `region_attention` | object | 模型關注的身體部位佔比，總和為 1 |
 | `warnings` | string[] | 需提醒使用者的事項，可能為空陣列 |
 | `message` | string | 人可讀的狀態說明 |
+| `uncertain` | boolean | 結果是否不可靠，見 3.4 |
+| `uncertainty_reasons` | string[] | 判定為不確定的原因；`uncertain` 為 `false` 時為空陣列 |
 
 ### 3.2 風險分級門檻
 
@@ -177,6 +181,26 @@ MediaPipe Pose 的 **world landmarks**，每幀 33 個關節點：
 為系統推測值，任何單側或左右比較的結論皆無依據。
 
 建議前端文案：「模型主要參考的動作部位」，而非「問題部位」。
+
+### 3.4 不確定判定（`uncertain`）
+
+醫療情境下，寧可回報「不確定」，也不對不可靠的輸入給出明確結論。
+符合任一條件即 `uncertain: true`：
+
+| 條件 | 理由 |
+|---|---|
+| 風險機率介於 0.35–0.70 | 交叉驗證中此區間陽性、陰性大量重疊 |
+| 任一使用的動作關節可見度 < 0.80 | 座標多為推測值 |
+| 可用動作少於 2 項 | 單一影片的雜訊無法被其他動作平衡 |
+| 年齡 < 65 | 超出訓練族群（69–88 歲） |
+
+缺 1 項動作（完成 2/3）只發警告、不判定為不確定。
+
+`uncertain` 為 `true` 時 `risk_level` 仍照常回傳（表示模型傾向），
+但**前端不應將其呈現為結論**，應改為建議由治療師依 AWGS 2019 準則評估。
+
+交叉驗證（30 位受試者，out-of-fold）中，9 人落在灰色區間，
+8 個誤判中有 5 個落在此區間；其餘 21 人的正確率為 86%。
 
 ---
 
