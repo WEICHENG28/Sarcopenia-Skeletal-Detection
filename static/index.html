@@ -831,7 +831,7 @@
 
             if (videoData[actionId] && !confirm(`確定要重錄【${actionName}】嗎？影片將被覆蓋。`)) return;
 
-            cancelPendingAutoStop();
+            if (live.timedStopHandle !== null) clearTimeout(live.timedStopHandle);
             setBtnState(btnId, true);
             try {
                 const startRes = await fetch(`${API_BASE}/camera/recordings/start`, { method: 'POST' });

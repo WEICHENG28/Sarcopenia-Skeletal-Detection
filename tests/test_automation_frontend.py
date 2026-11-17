@@ -318,3 +318,20 @@ def test_failed_or_skipped_inference_is_not_presented_as_low_risk():
     assert "box.style.display = 'block'" in source
     assert "本次沒有有效的 AI 風險結果" in source
     assert "不是依本次檢測產生的建議" in source
+
+
+def test_statement_level_calls_only_use_defined_functions():
+    # 合併衝突曾留下呼叫已刪除函式的程式碼，導致每次開始錄影都丟出 ReferenceError。
+    import re
+
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    called = set(re.findall(
+        r"^\s+(?:await\s+|void\s+|return\s+)?([a-z]\w*)\(", source, re.M
+    ))
+    defined = set(re.findall(r"function\s+(\w+)", source))
+    defined |= set(re.findall(r"(?:const|let|var)\s+(\w+)\s*=", source))
+    browser_globals = {
+        "alert", "cancelAnimationFrame", "clearInterval", "clearTimeout",
+        "reject", "resolve", "setInterval", "setTimeout",
+    }
+    assert called - defined - browser_globals == set()
