@@ -2343,8 +2343,11 @@
             if (!automationSequenceActive || token !== automationRunToken) return;
             if (finishedActionId && AUTOMATED_ACTIONS[automationActionIndex]?.id !== finishedActionId) return;
             if (finishedActionId) {
-                setBanner(`${ACTION_LABEL[finishedActionId]}：結束`, 'ok');
-                await speakAsync('結束', { minimumMs: 800 });
+                setBanner(`${ACTION_LABEL[finishedActionId]}：完成`, 'ok');
+                // 停止錄影時已播報完成語句（如「半蹲動作已記錄，錄影即將結束」），
+                // 這裡只等它播完，不再加播「結束」，避免受測者分不清哪一句才是真的結束。
+                await liveSpeechChain;
+                await new Promise(resolve => setTimeout(resolve, 800));
                 if (!automationSequenceActive || token !== automationRunToken) return;
             }
             automationActionIndex++;
