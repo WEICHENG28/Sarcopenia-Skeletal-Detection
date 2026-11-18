@@ -20,7 +20,8 @@ def test_launcher_prefers_kebbi_app_over_firefox():
     script = (ROOT / "scripts" / "start_kebbi_session.ps1").read_text(encoding="utf-8")
     assert '$kebbiApp = "tw.sarcopenia.kebbi"' in script
     assert "am force-stop org.mozilla.firefox" in script
-    assert "monkey -p $kebbiApp -c android.intent.category.LAUNCHER 1" in script
+    assert 'am start -n "$kebbiApp/.MainActivity"' in script
+    assert "shell monkey" not in script
 
 
 def test_launcher_does_not_add_breeze_dependency():
