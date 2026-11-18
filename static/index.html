@@ -5,14 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>身體功能正式收案系統</title>
     <style>
+        /* 視覺系統：醫療院所常見的沉穩藍灰配色、細框平面卡片、無裝飾性漸層與表情符號。 */
         :root {
-            --primary-color: #4f46e5;
-            --success-color: #10b981;
-            --danger-color: #f43f5e;
-            --warning-color: #f59e0b;
-            --bg-color: #f1f5f9;
+            --primary-color: #1f4e79;
+            --primary-strong: #163a5b;
+            --primary-soft: #e9f0f7;
+            --success-color: #2e7d4f;
+            --success-soft: #eaf4ee;
+            --danger-color: #b42318;
+            --danger-soft: #fdf0ee;
+            --warning-color: #a15c00;
+            --warning-soft: #fdf5e7;
+            --bg-color: #f3f4f6;
             --card-bg: #ffffff;
-            --text-main: #1e293b;
+            --border-color: #d6dbe1;
+            --text-main: #1c2430;
+            --text-muted: #5b6573;
+            --radius: 10px;
             --base-font-size: 18px;
         }
 
@@ -20,61 +29,73 @@
 
         body {
             background-color: var(--bg-color);
-            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+            font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
             margin: 0;
             color: var(--text-main);
             font-size: var(--base-font-size);
-            transition: all 0.2s ease-in-out;
+            line-height: 1.5;
         }
 
-        .font-control-bar {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(8px);
-            border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        /* ── 頁首 ── */
+        .app-header {
+            position: sticky;
+            top: 0;
             z-index: 1000;
             display: flex;
             align-items: center;
-            gap: 15px;
-            border: 1px solid rgba(0,0,0,0.05);
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 24px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
         }
+        .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .brand-mark {
+            width: 6px;
+            height: 34px;
+            border-radius: 3px;
+            background: var(--primary-color);
+            flex: none;
+        }
+        .brand-name { font-size: 18px; font-weight: 700; color: var(--primary-strong); letter-spacing: .02em; }
+        .brand-sub { font-size: 13px; color: var(--text-muted); }
 
+        .font-control-bar { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+        .font-control-label { color: var(--text-muted); margin-right: 4px; }
         .font-btn {
-            border: none;
-            background: #e2e8f0;
-            padding: 8px 18px;
-            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-main);
+            padding: 6px 14px;
+            border-radius: 6px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 600;
             font-size: 14px;
-            transition: 0.2s;
+            font-family: inherit;
         }
-        .font-btn:hover { background: var(--primary-color); color: white; }
-        .font-btn.active { background: var(--primary-color); color: white; }
+        .font-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .font-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
 
         .main-wrapper {
             max-width: 1000px;
-            margin: 80px auto;
-            padding: 20px;
+            margin: 24px auto 48px;
+            padding: 0 20px;
         }
 
         .rehearsal-banner {
             max-width: 960px;
-            margin: 95px auto -55px;
-            padding: 14px 20px;
-            border: 2px solid #1d4ed8;
-            border-radius: 16px;
-            background: #eff6ff;
-            color: #1e3a8a;
-            text-align: center;
-            font-weight: 800;
+            margin: 16px auto 0;
+            padding: 10px 16px;
+            border: 1px solid #b9cbe0;
+            border-left: 4px solid var(--primary-color);
+            border-radius: var(--radius);
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+            font-weight: 600;
             line-height: 1.5;
         }
         .rehearsal-banner[hidden] { display: none; }
+
         .audio-unlock-overlay {
             position: fixed;
             inset: 0;
@@ -82,29 +103,30 @@
             display: grid;
             place-items: center;
             padding: 28px;
-            background: rgba(15, 23, 42, 0.78);
+            background: rgba(17, 24, 39, 0.72);
         }
         .audio-unlock-overlay[hidden] { display: none; }
         .audio-unlock-card {
-            width: min(720px, 92vw);
-            padding: 34px;
-            border-radius: 24px;
-            background: white;
+            width: min(640px, 92vw);
+            padding: 32px;
+            border-radius: var(--radius);
+            background: var(--card-bg);
             text-align: center;
-            box-shadow: 0 24px 70px rgba(0,0,0,.3);
         }
-        .audio-unlock-card h2 { margin: 0 0 14px; color: #312e81; font-size: 1.8em; }
-        .audio-unlock-card p { margin: 0 0 22px; line-height: 1.6; }
+        .audio-unlock-card h2 { margin: 0 0 12px; color: var(--primary-strong); font-size: 1.5em; }
+        .audio-unlock-card p { margin: 0 0 22px; line-height: 1.6; color: var(--text-muted); }
         .audio-unlock-card button {
-            min-width: 360px;
-            padding: 18px 28px;
+            min-width: 320px;
+            padding: 16px 28px;
             border: 0;
-            border-radius: 18px;
+            border-radius: 8px;
             background: var(--primary-color);
-            color: white;
-            font-size: 1.25em;
-            font-weight: 800;
+            color: #fff;
+            font-size: 1.2em;
+            font-weight: 700;
+            font-family: inherit;
         }
+
         .simulation-placeholder {
             position: absolute;
             inset: 0;
@@ -114,74 +136,84 @@
             justify-content: center;
             gap: 12px;
             padding: 24px;
-            background: linear-gradient(135deg, #111827, #312e81);
-            color: white;
+            background: #1c2430;
+            color: #fff;
             text-align: center;
-            font-size: 1.15em;
-            font-weight: 800;
+            font-size: 1.1em;
+            font-weight: 700;
             z-index: 3;
         }
         .simulation-placeholder[hidden] { display: none; }
-        .simulation-placeholder small { max-width: 620px; font-size: .65em; font-weight: 500; opacity: .8; }
+        .simulation-placeholder small { max-width: 620px; font-size: .65em; font-weight: 400; opacity: .8; }
         .simulation-controls {
             display: flex;
             gap: 12px;
             align-items: center;
             justify-content: center;
-            margin: 18px 0 28px;
-            padding: 16px;
-            border: 2px dashed #7c3aed;
-            border-radius: 16px;
-            background: #f5f3ff;
+            margin: 0 0 20px;
+            padding: 14px;
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius);
+            background: var(--card-bg);
+            color: var(--text-muted);
         }
         .simulation-controls[hidden] { display: none; }
-        .simulation-controls button { padding: 12px 20px; border: 0; border-radius: 12px; background: #6d28d9; color: white; font-weight: 800; cursor: pointer; }
+        .simulation-controls button {
+            padding: 10px 18px; border: 0; border-radius: 8px;
+            background: var(--primary-color); color: #fff; font-weight: 700; cursor: pointer; font-family: inherit;
+        }
 
         .card {
             background: var(--card-bg);
-            border-radius: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.08);
-            padding: 50px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 28px 32px;
         }
 
-        h1 { font-size: 2.2em; color: var(--primary-color); margin: 0; text-align: center; }
-        .subtitle { text-align: center; opacity: 0.5; margin: 15px 0 40px 0; font-size: 1.1em; }
+        .header { margin-bottom: 20px; }
+        h1 { font-size: 1.6em; color: var(--text-main); margin: 0; font-weight: 700; }
+        .subtitle { color: var(--text-muted); margin: 6px 0 0; font-size: .9em; }
+        .section-title {
+            margin: 28px 0 12px;
+            font-size: .85em;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: .04em;
+        }
 
         .input-section {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            margin-bottom: 40px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
         }
-
         .input-box label {
             display: block;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             font-weight: 600;
-            font-size: 1em;
+            font-size: .8em;
+            color: var(--text-muted);
         }
-
         input, select {
             width: 100%;
-            padding: 18px;
-            border: 2px solid #e2e8f0;
-            border-radius: 15px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             font-size: 1em;
-            background: #f8fafc;
-            transition: 0.3s;
+            font-family: inherit;
+            background: #fff;
             color: var(--text-main);
         }
-        input:focus, select:focus { border-color: var(--primary-color); background: white; outline: none; }
+        input:focus, select:focus { border-color: var(--primary-color); outline: 2px solid var(--primary-soft); }
 
         .video-container {
             position: relative;
-            background: #000;
-            border-radius: 25px;
+            background: #111;
+            border-radius: var(--radius);
             aspect-ratio: 16 / 9;
-            margin-bottom: 40px;
+            margin-bottom: 8px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            border: 5px solid white;
+            border: 1px solid var(--border-color);
         }
         #webcam { width: 100%; height: 100%; object-fit: cover; display: block; }
         #poseCanvas {
@@ -196,33 +228,32 @@
         /* 即時動作提示只提供引導與計次，不代表醫療診斷或動作品質評分。 */
         .live-banner {
             position: absolute;
-            top: 14px;
+            top: 12px;
             left: 50%;
             transform: translateX(-50%);
             max-width: 90%;
-            padding: 10px 22px;
-            border-radius: 30px;
-            font-weight: bold;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 600;
             font-size: 0.8em;
-            color: white;
+            color: #fff;
             text-align: center;
             display: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
             z-index: 2;
         }
-        .live-banner-warn { background: rgba(244, 63, 94, 0.92); }
-        .live-banner-info { background: rgba(79, 70, 229, 0.92); }
-        .live-banner-ok   { background: rgba(16, 185, 129, 0.92); }
+        .live-banner-warn { background: rgba(161, 92, 0, 0.94); }
+        .live-banner-info { background: rgba(22, 58, 91, 0.92); }
+        .live-banner-ok   { background: rgba(46, 125, 79, 0.94); }
 
         .live-badge {
             position: absolute;
-            bottom: 14px;
-            right: 14px;
-            padding: 10px 18px;
-            border-radius: 20px;
-            background: rgba(0,0,0,0.65);
-            color: white;
-            font-weight: bold;
+            bottom: 12px;
+            right: 12px;
+            padding: 8px 14px;
+            border-radius: 6px;
+            background: rgba(17, 24, 39, 0.78);
+            color: #fff;
+            font-weight: 600;
             font-size: 0.85em;
             display: none;
             z-index: 2;
@@ -230,217 +261,269 @@
         .readiness-card {
             position: absolute;
             left: 50%;
-            bottom: 18px;
+            bottom: 16px;
             z-index: 4;
             width: min(560px, 90%);
-            padding: 16px 18px;
+            padding: 14px 18px;
             transform: translateX(-50%);
-            border-radius: 16px;
-            background: rgba(15, 23, 42, .92);
-            color: white;
+            border-radius: 8px;
+            background: rgba(17, 24, 39, .9);
+            color: #fff;
             text-align: center;
-            box-shadow: 0 12px 28px rgba(0,0,0,.35);
         }
         .readiness-card[hidden] { display: none; }
-        .readiness-title { font-size: 1.05em; font-weight: 900; }
-        .readiness-status { margin: 6px 0 10px; color: #dbeafe; font-size: .82em; }
-        .readiness-progress { height: 8px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.18); }
-        .readiness-progress span { display: block; width: 0; height: 100%; background: #22c55e; transition: width .2s ease; }
+        .readiness-title { font-size: 1em; font-weight: 700; }
+        .readiness-status { margin: 4px 0 10px; color: #d6dee8; font-size: .82em; }
+        .readiness-progress { height: 6px; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.2); }
+        .readiness-progress span { display: block; width: 0; height: 100%; background: #6fbf8b; transition: width .2s ease; }
         .readiness-override {
             margin-top: 12px;
-            padding: 10px 16px;
-            border: 2px solid white;
-            border-radius: 12px;
-            background: #f59e0b;
-            color: #111827;
-            font-weight: 900;
+            padding: 8px 16px;
+            border: 0;
+            border-radius: 6px;
+            background: #f0b44c;
+            color: #1c2430;
+            font-weight: 700;
+            font-family: inherit;
         }
 
         .btn-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
+            gap: 12px;
         }
-
         .btn {
-            padding: 25px 15px;
-            border: none;
-            border-radius: 20px;
-            font-size: 1.1em;
-            font-weight: bold;
+            padding: 16px 12px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 700;
+            font-family: inherit;
             cursor: pointer;
-            color: white;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            color: #fff;
         }
-
         .btn-primary { background: var(--primary-color); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-strong); }
         .btn-success { background: var(--success-color); }
         .btn-danger { background: var(--danger-color); }
-
         .btn-submit {
             grid-column: span 3;
-            margin-top: 30px;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            border-radius: 50px;
-            font-size: 1.3em;
-            padding: 30px;
+            margin-top: 8px;
+            background: var(--text-main);
+            font-size: 1.1em;
+            padding: 18px;
         }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
-        .btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
-
+        /* ── 自動流程狀態 ── */
         .automation-panel {
-            margin: 0 0 30px;
-            padding: 18px 22px;
-            border: 2px solid #c7d2fe;
-            border-radius: 18px;
-            background: #eef2ff;
-            text-align: center;
+            margin: 0 0 20px;
+            padding: 16px 20px;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--primary-color);
+            border-radius: var(--radius);
+            background: #fafbfc;
         }
-        .automation-title { font-weight: 800; color: #3730a3; }
-        #automationMessage { margin-top: 8px; line-height: 1.5; }
+        .automation-title { font-weight: 700; color: var(--primary-strong); }
+        #automationMessage { margin-top: 4px; line-height: 1.5; color: var(--text-main); }
         .flow-timeline {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
-            gap: 6px;
-            margin-top: 14px;
+            gap: 0;
+            margin-top: 16px;
+            counter-reset: flow;
         }
         .flow-step {
-            padding: 8px 5px;
-            border-radius: 10px;
-            background: rgba(255,255,255,.72);
-            color: #64748b;
-            font-size: .68em;
-            font-weight: 800;
+            position: relative;
+            padding-top: 30px;
+            color: var(--text-muted);
+            font-size: .72em;
+            font-weight: 600;
             text-align: center;
+            counter-increment: flow;
         }
-        .flow-step.is-done { color: #166534; background: #dcfce7; }
-        .flow-step.is-active { color: #312e81; background: #c7d2fe; box-shadow: 0 0 0 2px #4f46e5 inset; }
-        .flow-step.is-error { color: #991b1b; background: #fee2e2; }
+        .flow-step::before {
+            content: counter(flow);
+            position: absolute;
+            top: 0;
+            left: 50%;
+            z-index: 1;
+            width: 24px;
+            height: 24px;
+            margin-left: -12px;
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            background: #fff;
+            color: var(--text-muted);
+            font-size: 12px;
+            line-height: 20px;
+        }
+        .flow-step::after {
+            content: "";
+            position: absolute;
+            top: 11px;
+            left: calc(50% + 12px);
+            width: calc(100% - 24px);
+            height: 2px;
+            background: var(--border-color);
+        }
+        .flow-step:last-child::after { display: none; }
+        .flow-step.is-done { color: var(--success-color); }
+        .flow-step.is-done::before { content: "✓"; border-color: var(--success-color); background: var(--success-color); color: #fff; }
+        .flow-step.is-done::after { background: var(--success-color); }
+        .flow-step.is-active { color: var(--primary-strong); font-weight: 700; }
+        .flow-step.is-active::before { border-color: var(--primary-color); background: var(--primary-color); color: #fff; }
+        .flow-step.is-error { color: var(--danger-color); }
+        .flow-step.is-error::before { content: "!"; border-color: var(--danger-color); background: var(--danger-color); color: #fff; }
         #manualNameFallback { display: none; margin-top: 14px; gap: 10px; }
-        #manualNameFallback input { padding: 12px; font-size: 0.85em; }
+        #manualNameFallback input { padding: 10px; font-size: 0.85em; }
         #manualNameFallback button {
-            border: 0; border-radius: 12px; padding: 10px 18px;
-            background: #3730a3; color: white; font-weight: bold;
+            border: 0; border-radius: 8px; padding: 10px 18px; white-space: nowrap;
+            background: var(--primary-color); color: #fff; font-weight: 700; font-family: inherit;
         }
 
-        /* 上傳進度 */
+        /* ── 上傳進度 ── */
         .progress-area {
             display: none;
-            margin-top: 20px;
-            background: #f8fafc;
-            border-radius: 20px;
-            padding: 25px;
+            margin-top: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 4px 18px;
         }
         .progress-step {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 14px;
             padding: 12px 0;
             font-size: 1em;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--border-color);
         }
         .progress-step:last-child { border-bottom: none; }
-        .step-icon { font-size: 1.4em; width: 30px; text-align: center; }
+        .step-icon {
+            width: 26px; height: 26px; flex: none;
+            border-radius: 50%;
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+            font-size: 13px; font-weight: 700;
+            line-height: 26px; text-align: center;
+        }
         .step-text { flex: 1; }
-        .step-status { font-weight: bold; }
-        .status-waiting { color: #94a3b8; }
+        .step-status { font-weight: 600; }
+        .status-waiting { color: var(--text-muted); }
         .status-uploading { color: var(--warning-color); }
         .status-done { color: var(--success-color); }
         .status-error { color: var(--danger-color); }
 
-        /* 結果頁面 */
-        .result-view { text-align: center; display: none; }
-        .result-score { font-size: 4.5em; font-weight: 900; margin: 30px 0; }
-        .advice-box {
-            background: #f1f5f9;
-            padding: 30px;
-            border-radius: 20px;
+        /* ── 結果頁 ── */
+        .result-view { display: none; }
+        .result-summary {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px 28px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: #fafbfc;
+        }
+        .result-score { font-size: 3.2em; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+        .result-level-label { font-size: .8em; color: var(--text-muted); font-weight: 600; }
+        .result-level { font-size: 1.5em; font-weight: 700; }
+        .result-section {
+            margin-top: 16px;
+            padding: 18px 22px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
             text-align: left;
             line-height: 1.7;
-            font-size: 1.1em;
-            border-left: 8px solid var(--primary-color);
-            white-space: pre-line;
         }
-        .rehab-education-box {
-            background: #ecfdf5;
-            padding: 24px 30px;
-            border-radius: 20px;
-            text-align: left;
-            margin-top: 20px;
-            line-height: 1.65;
-            border-left: 8px solid var(--success-color);
-        }
+        .result-section > strong:first-child { display: block; margin-bottom: 8px; font-size: 1.05em; color: var(--text-main); }
+        .advice-box { white-space: pre-line; border-left: 4px solid var(--primary-color); }
+        .rehab-education-box { border-left: 4px solid var(--success-color); }
         .rehab-education-box ul { margin: 12px 0; padding-left: 1.4em; }
-        .rehab-education-box li { margin-bottom: 10px; }
+        .rehab-education-box li { margin-bottom: 8px; }
         .rehab-next-step {
             margin: 12px 0;
-            padding: 12px 14px;
-            border-left: 5px solid #2563eb;
-            border-radius: 8px;
-            background: #eff6ff;
-            color: #1e3a8a;
-            font-weight: 700;
+            padding: 10px 14px;
+            border-radius: 6px;
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+            font-weight: 600;
             line-height: 1.6;
         }
         .rehab-safety {
             margin-top: 14px;
-            padding: 14px;
-            border-radius: 12px;
-            color: #991b1b;
-            background: #fef2f2;
-            font-weight: 700;
+            padding: 12px 14px;
+            border: 1px solid #f1c3bd;
+            border-radius: 6px;
+            color: var(--danger-color);
+            background: var(--danger-soft);
+            font-weight: 600;
         }
-        .rehab-source { color: #475569; font-size: 0.85em; margin-top: 12px; }
-        .features-box {
-            background: #eff6ff;
-            padding: 20px 30px;
-            border-radius: 20px;
-            text-align: left;
-            margin-top: 20px;
-            font-size: 1em;
-            border-left: 8px solid var(--primary-color);
-        }
+        .rehab-source { color: var(--text-muted); font-size: 0.82em; margin-top: 12px; }
+        .features-box { border-left: 4px solid var(--primary-color); }
         .caution-box {
-            background: #fffbeb; border: 2px solid var(--warning-color);
-            border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
-            text-align: left; line-height: 1.7;
+            margin-bottom: 4px;
+            padding: 14px 18px;
+            border: 1px solid #ecd3a6;
+            border-left: 4px solid var(--warning-color);
+            border-radius: var(--radius);
+            background: var(--warning-soft);
+            text-align: left;
+            line-height: 1.7;
         }
-        .caution-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+        .caution-box ul { margin: 6px 0 0 0; padding-left: 20px; }
         .features-box ul { margin: 10px 0 0 0; padding-left: 20px; line-height: 2; }
+        .result-next {
+            margin-top: 24px;
+            width: 100%;
+        }
 
+        @media (max-width: 760px) {
+            .input-section { grid-template-columns: repeat(2, 1fr); }
+            .font-control-label, .brand-sub { display: none; }
+        }
     </style>
 </head>
 <body>
 
     <div class="audio-unlock-overlay" id="audioUnlockOverlay" hidden>
         <div class="audio-unlock-card">
-            <h2>🔊 啟用凱比語音提示</h2>
+            <h2>啟用凱比語音提示</h2>
             <p id="audioUnlockStatus">Firefox 阻擋了自動語音；請點一下作為備援解鎖。</p>
             <button id="audioUnlockButton" type="button" onclick="enableKebbiAudio(this)">啟用語音</button>
         </div>
     </div>
 
     <div class="rehearsal-banner" id="rehearsalBanner" hidden>
-        🧪 電腦彩排模式：本瀏覽器暫代凱比螢幕，身分仍由電腦端 C922 掃描 QR Code。此模式僅供開發驗證，不代表凱比實機測試完成。
+        電腦彩排模式：本瀏覽器暫代凱比螢幕，身分仍由電腦端 C922 掃描 QR Code。此模式僅供開發驗證，不代表凱比實機測試完成。
     </div>
 
-    <div class="font-control-bar">
-        <span style="font-size: 16px; font-weight: bold;">字體顯示：</span>
-        <button class="font-btn" onclick="updateFontSize('16px', this)">標準</button>
-        <button class="font-btn" onclick="updateFontSize('24px', this)">較大</button>
-        <button class="font-btn active" onclick="updateFontSize('32px', this)">特大(推薦長輩)</button>
-        <button class="font-btn active" id="speechToggleBtn" onclick="toggleSpeech(this)">🔊 語音提示：開</button>
-    </div>
+    <header class="app-header">
+        <div class="brand">
+            <div class="brand-mark" aria-hidden="true"></div>
+            <div>
+                <div class="brand-name">肌少症預防守護者</div>
+                <div class="brand-sub">動作功能初步篩檢｜非醫療診斷</div>
+            </div>
+        </div>
+        <div class="font-control-bar">
+            <span class="font-control-label">字體</span>
+            <button class="font-btn" onclick="updateFontSize('16px', this)">標準</button>
+            <button class="font-btn" onclick="updateFontSize('24px', this)">較大</button>
+            <button class="font-btn active" onclick="updateFontSize('32px', this)">特大（長輩）</button>
+            <button class="font-btn active" id="speechToggleBtn" onclick="toggleSpeech(this)">語音提示：開</button>
+        </div>
+    </header>
 
     <div class="main-wrapper">
         <div class="card">
 
             <div id="recordView">
                 <div class="header">
-                    <h1>🦾 身體功能風險篩檢</h1>
-                    <div class="subtitle">動作檢測與一般性健康衛教｜非醫療診斷</div>
+                    <h1>身體功能篩檢</h1>
+                    <div class="subtitle">起立坐下、行走與半蹲動作檢測，並提供一般性健康衛教</div>
                 </div>
 
                 <div class="automation-panel" id="automationPanel">
@@ -461,23 +544,8 @@
                 </div>
 
                 <div class="simulation-controls" id="simulationControls" hidden>
-                    <button id="runSimulationBtn" onclick="runNoHardwareSimulation()">▶ 播放完整流程模擬</button>
+                    <button id="runSimulationBtn" onclick="runNoHardwareSimulation()">播放完整流程模擬</button>
                     <span>不使用相機、麥克風、錄影或模型推論</span>
-                </div>
-
-                <div class="input-section">
-                    <div class="input-box"><label>受測者編號</label><input type="text" id="subjectId" placeholder="SB01"></div>
-                    <div class="input-box"><label>年齡</label><input type="number" id="age" placeholder="75"></div>
-                    <div class="input-box"><label>身高 (cm)</label><input type="number" id="height" placeholder="165"></div>
-                    <div class="input-box"><label>體重 (kg)</label><input type="number" id="weight" placeholder="60"></div>
-                    <div class="input-box" style="grid-column: span 2;">
-                        <label>性別</label>
-                        <select id="gender">
-                            <option value="">-- 請選擇 --</option>
-                            <option value="male">男性</option>
-                            <option value="female">女性</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="video-container">
@@ -498,26 +566,42 @@
                     </div>
                 </div>
 
+                <div class="section-title">受測者資料</div>
+                <div class="input-section">
+                    <div class="input-box"><label>受測者編號</label><input type="text" id="subjectId" placeholder="SB01"></div>
+                    <div class="input-box"><label>年齡</label><input type="number" id="age" placeholder="75"></div>
+                    <div class="input-box"><label>身高 (cm)</label><input type="number" id="height" placeholder="165"></div>
+                    <div class="input-box"><label>體重 (kg)</label><input type="number" id="weight" placeholder="60"></div>
+                    <div class="input-box" style="grid-column: span 2;">
+                        <label>性別</label>
+                        <select id="gender">
+                            <option value="">-- 請選擇 --</option>
+                            <option value="male">男性</option>
+                            <option value="female">女性</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="btn-grid">
                     <button class="btn btn-primary" id="btnSit" onclick="toggleRecording('sit', 'btnSit', '起立坐下')">錄製：起立坐下</button>
                     <button class="btn btn-primary" id="btnWalk" onclick="toggleRecording('walk', 'btnWalk', '走三公尺')">錄製：走三公尺</button>
                     <button class="btn btn-primary" id="btnSquat" onclick="toggleRecording('squat', 'btnSquat', '半蹲')">錄製：半蹲</button>
-                    <button class="btn btn-submit" id="btnSubmit" onclick="startUpload()">🚀 傳送影片進行 AI 分析</button>
+                    <button class="btn btn-submit" id="btnSubmit" onclick="startUpload()">傳送影片進行分析</button>
                 </div>
 
                 <div class="progress-area" id="progressArea">
                     <div class="progress-step" id="stepSit">
-                        <span class="step-icon">🪑</span>
+                        <span class="step-icon">1</span>
                         <span class="step-text">起立坐下影片</span>
                         <span class="step-status status-waiting" id="statusSit">等待中</span>
                     </div>
                     <div class="progress-step" id="stepWalk">
-                        <span class="step-icon">🚶</span>
+                        <span class="step-icon">2</span>
                         <span class="step-text">走三公尺影片</span>
                         <span class="step-status status-waiting" id="statusWalk">等待中</span>
                     </div>
                     <div class="progress-step" id="stepSquat">
-                        <span class="step-icon">🏋️</span>
+                        <span class="step-icon">3</span>
                         <span class="step-text">半蹲影片</span>
                         <span class="step-status status-waiting" id="statusSquat">等待中</span>
                     </div>
@@ -526,36 +610,39 @@
 
             <div id="resultView" class="result-view">
                 <div class="header">
-                    <h1>📋 身體功能篩檢結果</h1>
+                    <h1>篩檢結果</h1>
                     <div id="resInfo" class="subtitle">受測者：-</div>
                 </div>
-                <div class="result-score" id="resProb">0%</div>
-                <div style="font-size: 1.6em; font-weight: bold; margin-bottom: 30px;">
-                    風險等級：<span id="resLevel">-</span>
+                <div class="result-summary">
+                    <div class="result-score" id="resProb">0%</div>
+                    <div>
+                        <div class="result-level-label">風險等級</div>
+                        <div class="result-level" id="resLevel">-</div>
+                    </div>
                 </div>
                 <div class="caution-box" id="cautionBox" style="display:none;">
-                    <strong id="cautionTitle">⚠️ 請注意</strong>
+                    <strong id="cautionTitle">請注意</strong>
                     <ul id="cautionList"></ul>
                 </div>
-                <div class="advice-box">
-                    <strong style="font-size: 1.2em;">💡 篩檢結果說明：</strong><hr>
+                <div class="result-section advice-box">
+                    <strong>結果說明</strong>
                     <span id="resAdvice">-</span>
                 </div>
-                <div class="rehab-education-box" id="rehabEducationBox">
-                    <strong style="font-size: 1.2em;">🏃 檢測後一般活動與防跌衛教</strong>
+                <div class="result-section rehab-education-box" id="rehabEducationBox">
+                    <strong>檢測後一般活動與防跌衛教</strong>
                     <p id="rehabIntro"></p>
                     <div class="rehab-next-step" id="rehabNextStep"></div>
                     <ul id="rehabEducationList"></ul>
                     <div class="rehab-safety">
                         <strong>立即停止：</strong>胸痛／胸悶、無法舒適說話的呼吸困難、暈眩／快昏倒、新發不規則心跳，或新發且明顯的疼痛。症狀嚴重或休息後未改善，請立即尋求醫療協助；緊急時撥 119。
                     </div>
-                    <div class="rehab-source">一般原則參考：WHO 高齡者身體活動建議、衛生福利部國民健康署《全民身體活動指引》。本頁不提供個別診斷、運動處方或藥物／營養劉量調整。</div>
+                    <div class="rehab-source">一般原則參考：WHO 高齡者身體活動建議、衛生福利部國民健康署《全民身體活動指引》。本頁不提供個別診斷、運動處方或藥物／營養劑量調整。</div>
                 </div>
-                <div class="features-box" id="featuresBox" style="display:none;">
-                    <strong>📊 主要影響因子：</strong>
+                <div class="result-section features-box" id="featuresBox" style="display:none;">
+                    <strong>主要影響因子</strong>
                     <ul id="featuresList"></ul>
                 </div>
-                <button class="btn btn-primary" style="margin-top: 40px; width: 100%; border-radius: 50px;" onclick="location.reload()">完成，錄製下一位</button>
+                <button class="btn btn-primary result-next" onclick="location.reload()">完成，錄製下一位</button>
             </div>
 
         </div>
@@ -579,7 +666,7 @@
         }
         if (NO_HARDWARE_SIMULATION_MODE) {
             document.getElementById('rehearsalBanner').textContent =
-                '🧪 無硬體流程模擬：不使用凱比、Webcam或麥克風，只驗證介面、提示與狀態順序；不得作為實機或模型成果。';
+                '無硬體流程模擬：不使用凱比、Webcam或麥克風，只驗證介面、提示與狀態順序；不得作為實機或模型成果。';
         }
         let kebbiAudioReady = !KEBBI_MODE;
 
@@ -780,7 +867,7 @@
                     const totalSec = Math.floor((Date.now() - startTime) / 1000);
                     const repSuffix = (currentRecordingActionId === actionId && live.repCount > 0)
                         ? ` · ${live.repCount}下` : '';
-                    btn.innerText = `✅ ${actionName} (${totalSec}s${repSuffix})`;
+                    btn.innerText = `${actionName} (${totalSec}s${repSuffix})`;
                     btn.style.backgroundColor = "#10b981";
                     recordingSaved = true;
                 } catch (err) {
@@ -799,7 +886,7 @@
                 if (recordingSaved && actionId === 'sit'
                     && stoppedRepCount < REP_TARGET.sit) {
                     videoData[actionId] = null;
-                    btn.innerText = `⚠️ 未完成（${stoppedRepCount} / ${REP_TARGET.sit} 下），請重錄`;
+                    btn.innerText = `未完成（${stoppedRepCount} / ${REP_TARGET.sit} 下），請重錄`;
                     btn.style.backgroundColor = "#f59e0b";
                     setBanner(`起立坐下只辨識到 ${stoppedRepCount} 下，不會送入 AI 分析`, 'warn');
                     setStatus('Sit', 'error', `未完成 ${stoppedRepCount}/${REP_TARGET.sit}`);
@@ -815,7 +902,7 @@
                 }
                 if (recordingSaved && actionId === 'walk' && !stoppedActionCompleted) {
                     videoData[actionId] = null;
-                    btn.innerText = '⚠️ 未到達終點，請重錄';
+                    btn.innerText = '未到達終點，請重錄';
                     btn.style.backgroundColor = "#f59e0b";
                     setBanner('行走測試未辨識到穩定終點，不會送入 AI 分析', 'warn');
                     setStatus('Walk', 'error', '未到達終點');
@@ -857,7 +944,7 @@
             startTime = Date.now();
             timerInterval = setInterval(() => {
                 let sec = Math.floor((Date.now() - startTime) / 1000);
-                btn.innerText = `⏹️ 錄製中... ${sec}秒`;
+                btn.innerText = `錄製中... ${sec}秒`;
             }, 1000);
 
             currentRecordingActionId = actionId;
@@ -870,7 +957,7 @@
                     if (currentRecordingActionId !== 'sit' || !isRecording
                         || live.autoStopTriggered) return;
                     live.autoStopTriggered = true;
-                    setBanner(`⚠️ 60 秒內只辨識到 ${live.repCount}/${REP_TARGET.sit} 下`, 'warn');
+                    setBanner(`60 秒內只辨識到 ${live.repCount}/${REP_TARGET.sit} 下`, 'warn');
                     void autoStopCurrentRecording('未在時間內完成五次起立坐下', 'warn');
                 }, SIT_MAX_RECORD_MS);
             } else if (actionId === 'walk') {
@@ -879,7 +966,7 @@
                     if (currentRecordingActionId !== 'walk' || !isRecording
                         || live.autoStopTriggered) return;
                     live.autoStopTriggered = true;
-                    setBanner('⚠️ 30 秒內未辨識到穩定終點', 'warn');
+                    setBanner('30 秒內未辨識到穩定終點', 'warn');
                     void autoStopCurrentRecording('未在時間內到達終點', 'warn');
                 }, WALK_MAX_RECORD_MS);
             } else if (actionId === 'squat') {
@@ -888,7 +975,7 @@
                     if (currentRecordingActionId !== 'squat' || !isRecording
                         || live.autoStopTriggered) return;
                     live.autoStopTriggered = true;
-                    setBanner('✅ 半蹲動作已記錄，即將結束', 'ok');
+                    setBanner('半蹲動作已記錄，即將結束', 'ok');
                     void queueSpeech('半蹲動作已記錄，錄影即將結束', { minimumMs: 500 })
                         .then(() => autoStopCurrentRecording('半蹲錄影 4 秒完成'));
                 }, SQUAT_RECORD_MS);
@@ -900,7 +987,7 @@
             if (!currentRecordingActionId || !isRecording) return;
             const actionId = currentRecordingActionId;
             await toggleRecording(actionId, BTN_ID_MAP[actionId], ACTION_LABEL[actionId]);
-            setBanner(`⏹️ 已自動停止錄影（${reason}）`, bannerKind);
+            setBanner(`已自動停止錄影（${reason}）`, bannerKind);
         }
 
         function setBtnState(activeId, disabled) {
@@ -951,7 +1038,7 @@
                 throw new Error(`${actionName} 上傳失敗：${detail}`);
             }
 
-            setStatus(statusKey, 'done', '完成 ✓');
+            setStatus(statusKey, 'done', '完成');
             return await res.json();
         }
 
@@ -995,11 +1082,11 @@
                 }
             } catch (err) {
                 const actionName = ACTION_MAP[currentUploadActionId] || 'Sit';
-                setStatus(actionName, 'error', '失敗 ✗');
+                setStatus(actionName, 'error', '失敗');
                 document.getElementById('btnSubmit').disabled = false;
-                document.getElementById('btnSubmit').innerText = "🚀 傳送影片進行 AI 分析";
+                document.getElementById('btnSubmit').innerText = "傳送影片進行分析";
                 const failureMessage = `上傳或分析失敗：${err.message}`;
-                setBanner(`⚠️ ${failureMessage}`, 'warn');
+                setBanner(`${failureMessage}`, 'warn');
                 showResult(sid, {
                     inference_result: {
                         status: 'error',
@@ -1089,7 +1176,7 @@
             const cautionBox = document.getElementById('cautionBox');
             if (cautions.length > 0) {
                 document.getElementById('cautionTitle').innerText =
-                    infer.uncertain ? '⚠️ 結果不確定的原因' : '⚠️ 請注意';
+                    infer.uncertain ? '結果不確定的原因' : '請注意';
                 const ul = document.getElementById('cautionList');
                 ul.innerHTML = '';
                 cautions.forEach(text => {
@@ -1234,14 +1321,14 @@
                     console.warn('GPU 加速初始化失敗，改用 CPU：', gpuErr);
                     poseLandmarker = await createPoseLandmarker(filesetResolver, 'CPU');
                 }
-                setBanner('✅ 即時計次已就緒', 'ok');
+                setBanner('即時計次已就緒', 'ok');
                 setTimeout(() => {
                     if (!currentRecordingActionId) setBanner('', null);
                 }, 1800);
                 poseLoopHandle = requestAnimationFrame(poseDetectLoop);
             } catch (err) {
                 console.warn('即時姿勢偵測無法啟用（不影響錄影與上傳）：', err);
-                setBanner('⚠️ 即時計次尚未啟用，錄影仍可使用', 'warn');
+                setBanner('即時計次尚未啟用，錄影仍可使用', 'warn');
             }
         }
 
@@ -1298,8 +1385,8 @@
                 if (live.outOfFrameSince === null) live.outOfFrameSince = nowSec;
                 if (nowSec - live.outOfFrameSince >= OUT_OF_FRAME_SEC) {
                     const framingMessage = ['sit', 'walk'].includes(currentRecordingActionId)
-                        ? '⚠️ 請確認肩、髖、膝與至少一側腳踝在畫面內'
-                        : '⚠️ 請確認全身（肩膀到腳踝）都在畫面內';
+                        ? '請確認肩、髖、膝與至少一側腳踝在畫面內'
+                        : '請確認全身（肩膀到腳踝）都在畫面內';
                     setBanner(framingMessage, 'warn');
                     // 姓名辨識時必須保持凱比安靜，否則頭上的 C922 會把
                     // 凱比自己的提示音當成受測者回答。
@@ -1382,7 +1469,7 @@
                 || live.walkTargetFrames < WALK_TARGET_STABLE_FRAMES) return;
             live.autoStopTriggered = true;
             live.actionCompleted = true;
-            setBanner('✅ 已到達終點定位，即將結束錄影', 'ok');
+            setBanner('已到達終點定位，即將結束錄影', 'ok');
             void queueSpeech('已到達終點，錄影即將結束', { minimumMs: 500 })
                 .then(() => autoStopCurrentRecording('已到達終點定位'));
         }
@@ -1398,7 +1485,7 @@
             if (!target || live.autoStopTriggered || elapsed < MIN_RECORD_SEC) return;
             if (live.repCount >= target) {
                 live.autoStopTriggered = true;
-                setBanner(`✅ 已完成 ${target} 下，即將自動結束錄影`, 'ok');
+                setBanner(`已完成 ${target} 下，即將自動結束錄影`, 'ok');
                 void queueSpeech(`已完成${target}下，錄影即將結束`, { minimumMs: 500 })
                     .then(() => autoStopCurrentRecording('已完成目標次數'));
             }
@@ -1552,7 +1639,7 @@
             document.getElementById('resultView').style.display = 'none';
             document.getElementById('progressArea').style.display = 'none';
             document.getElementById('btnSubmit').disabled = false;
-            document.getElementById('btnSubmit').innerText = '🚀 傳送影片進行 AI 分析';
+            document.getElementById('btnSubmit').innerText = '傳送影片進行分析';
             ['sit', 'walk', 'squat'].forEach(actionId => {
                 const button = document.getElementById(BTN_ID_MAP[actionId]);
                 button.disabled = false;
@@ -1615,7 +1702,7 @@
                     // 不可直接跳進動作測試。
                     loadParticipantIntoForm(state.participant);
                     identityFlowRunning = false;
-                    setBanner('✅ 身分已確認，請退後並讓肩膀、髖部、膝蓋與腳踝完整入鏡', 'info');
+                    setBanner('身分已確認，請退後並讓肩膀、髖部、膝蓋與腳踝完整入鏡', 'info');
                     if (previousState !== 'profile_loaded') void speakAsync('請完整入鏡');
                 }
             } catch (error) {
@@ -1627,7 +1714,7 @@
             if (!isActiveAutomationTab) return;
             if (!kebbiAudioReady) {
                 automationPresenceSince = null;
-                setBanner('🔊 請先點畫面上的「啟用語音」', 'warn');
+                setBanner('請先點畫面上的「啟用語音」', 'warn');
                 return;
             }
 
@@ -1644,7 +1731,7 @@
             if (nowSec - automationPresenceSince < 2.5) return;
 
             automationPresenceSince = null;
-            setBanner('✅ 全身入鏡確認完成，準備開始動作測試', 'ok');
+            setBanner('全身入鏡確認完成，準備開始動作測試', 'ok');
             void beginAutomatedTests(automationServerState.participant);
         }
 
@@ -1851,7 +1938,7 @@
         async function recognizeWithServer(purpose) {
             speechCaptureActive = true;
             stopPromptPlayback();
-            setBanner('🎤 電腦正在透過 C922 麥克風收音，請清楚說話', 'info');
+            setBanner('電腦正在透過 C922 麥克風收音，請清楚說話', 'info');
             try {
                 const result = await requestJson('/speech/listen', {
                     method: 'POST',
@@ -1944,7 +2031,7 @@
                     );
                 });
                 recorder.start(250);
-                setBanner('🎤 聽到嗶聲後，請清楚說話', 'info');
+                setBanner('聽到嗶聲後，請清楚說話', 'info');
                 await playListeningBeep();
                 await new Promise(resolve => setTimeout(resolve, durationMs));
                 if (recorder.state !== 'inactive') recorder.stop();
@@ -1963,7 +2050,7 @@
             speechCaptureActive = true;
             stopPromptPlayback();
             const seconds = purpose === 'confirmation' ? 3.5 : 4.5;
-            setBanner(`🎤 正在使用凱比麥克風收音 ${seconds} 秒，請清楚說話`, 'info');
+            setBanner(`正在使用凱比麥克風收音 ${seconds} 秒，請清楚說話`, 'info');
             try {
                 const blob = await captureKebbiMicrophone(seconds * 1000);
                 const form = new FormData();
@@ -2085,7 +2172,7 @@
                     }
                     if (result.status === 'invalid') {
                         document.getElementById('automationMessage').textContent = result.message;
-                        setBanner(`⚠️ ${result.message}`, 'warn');
+                        setBanner(`${result.message}`, 'warn');
                     }
                     await new Promise(resolve => setTimeout(resolve, 400));
                 }
@@ -2134,12 +2221,12 @@
                 });
             automationServerState = state;
             updateAutomationPanel(state);
-            setBanner(`✅ 已確認：${profile.name}`, 'ok');
+            setBanner(`已確認：${profile.name}`, 'ok');
             await speakAsync(
                 '您好，基本資料已載入。接下來將依序進行三項動作測試。',
                 { minimumMs: 2500 }
             );
-            setBanner('✅ 身分已確認，請退後並讓肩膀、髖部、膝蓋與腳踝完整入鏡', 'info');
+            setBanner('身分已確認，請退後並讓肩膀、髖部、膝蓋與腳踝完整入鏡', 'info');
             await speakAsync('請完整入鏡');
             identityFlowRunning = false;
         }
@@ -2225,7 +2312,7 @@
 
             if (automationActionIndex >= AUTOMATED_ACTIONS.length) {
                 automationSequenceActive = false;
-                setBanner('✅ 三項錄影完成，開始上傳分析', 'ok');
+                setBanner('三項錄影完成，開始上傳分析', 'ok');
                 await speakAsync('三項動作已完成，正在進行分析，請稍候。', { minimumMs: 1800 });
                 const participantId = automationServerState.participant?.participant_id;
                 try {
@@ -2237,7 +2324,7 @@
                     automationServerState = state;
                     updateAutomationPanel(state);
                 } catch (error) {
-                    setBanner(`⚠️ 無法進入分析階段：${error.message}`, 'warn');
+                    setBanner(`無法進入分析階段：${error.message}`, 'warn');
                     await reportAutomationFailure(`無法進入分析階段：${error.message}`);
                     return;
                 }
@@ -2274,7 +2361,7 @@
         function toggleSpeech(button) {
             speechEnabled = !speechEnabled;
             button.classList.toggle('active', speechEnabled);
-            button.textContent = speechEnabled ? '🔊 語音提示：開' : '🔇 語音提示：關';
+            button.textContent = speechEnabled ? '語音提示：開' : '語音提示：關';
             if (!speechEnabled) stopPromptPlayback();
         }
 
@@ -2292,7 +2379,7 @@
             const speechButton = document.getElementById('speechToggleBtn');
             speechEnabled = true;
             speechButton.classList.add('active');
-            speechButton.textContent = '🔊 語音提示：開';
+            speechButton.textContent = '語音提示：開';
             const confirmation = new Audio('/static/tts/good.mp3');
             confirmation.preload = 'auto';
             try {
@@ -2300,7 +2387,7 @@
                 kebbiAudioReady = true;
                 status.textContent = '語音已啟用。';
                 document.getElementById('audioUnlockOverlay').hidden = true;
-                setBanner('✅ 凱比語音提示已啟用', 'ok');
+                setBanner('凱比語音提示已啟用', 'ok');
                 return true;
             } catch (error) {
                 status.textContent = automatic
