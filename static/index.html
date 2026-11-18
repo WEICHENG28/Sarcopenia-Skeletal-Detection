@@ -1384,7 +1384,7 @@
 
         function evaluatePose(result, nowSec) {
             const landmarks = result.landmarks && result.landmarks[0];
-            if (landmarks) lastPersonSeenSec = nowSec;
+            if (personInView(landmarks)) lastPersonSeenSec = nowSec;
             handleAutoStart(landmarks, nowSec);
             checkAutoStandby(nowSec);
             const presenceFramingOk = checkFraming(landmarks);
@@ -1582,6 +1582,8 @@
         // 背景走過的人不會觸發。誤觸發時由自動取消或工作人員「立即停止」回到待命。
         const AUTO_START_STILL_SEC = 2.5;
         const AUTO_START_MIN_SHOULDER_SPAN = 0.12;
+        // 判斷「畫面中有人」的最低肩寬：空房間的椅子、水桶偶爾會被誤認成小骨架，需排除。
+        const AUTO_PRESENCE_MIN_SHOULDER_SPAN = 0.06;
         const AUTO_START_MAX_MOTION = 0.03;
         const AUTO_CANCEL_NO_QR_MS = 30000;
         const AUTO_CANCEL_ABSENT_SEC = 10;
@@ -1768,12 +1770,20 @@
             }
         }
 
+        function personInView(landmarks, minSpan = AUTO_PRESENCE_MIN_SHOULDER_SPAN) {
+            if (!landmarks) return false;
+            const left = landmarks[LANDMARK.L_SHOULDER];
+            const right = landmarks[LANDMARK.R_SHOULDER];
+            return landmarkIsInFrame(left) && landmarkIsInFrame(right)
+                && Math.abs(left.x - right.x) >= minSpan;
+        }
+
         function handleAutoStart(landmarks, nowSec) {
             if (!isActiveAutomationTab || automationServerState.state !== 'armed' || !kebbiAudioReady) {
                 autoStartSince = null;
                 return;
             }
-            if (!landmarks) {
+            if (!personInView(landmarks)) {
                 autoStartSince = null;
                 if (nowSec - lastPersonSeenSec >= AUTO_CLEAR_SEC) armedNeedsClear = false;
                 return;
@@ -1781,8 +1791,7 @@
             if (armedNeedsClear) return;
             const left = landmarks[LANDMARK.L_SHOULDER];
             const right = landmarks[LANDMARK.R_SHOULDER];
-            const near = landmarkIsInFrame(left) && landmarkIsInFrame(right)
-                && Math.abs(left.x - right.x) >= AUTO_START_MIN_SHOULDER_SPAN;
+            const near = personInView(landmarks, AUTO_START_MIN_SHOULDER_SPAN);
             const center = near ? { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 } : null;
             const moving = center && autoStartLastCenter
                 && Math.hypot(center.x - autoStartLastCenter.x, center.y - autoStartLastCenter.y)
