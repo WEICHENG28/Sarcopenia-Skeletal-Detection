@@ -1036,7 +1036,12 @@
             // 舊版前端自行以 0.6 / 0.3 判斷，與模型實際門檻（0.70 / 0.513 / 0.35）不符。
             const serverLevel = infer.risk_level ?? '';
             let level, levelColor, advice;
-            if (!inferenceAvailable || serverLevel === '無法評估') {
+            if (infer.age_not_applicable) {
+                level = "不適用（未滿 60 歲）";
+                levelColor = "var(--warning-color)";
+                advice = "【分析結果】AWGS 2019 肌少症篩檢準則適用於 60 歲以上長者，本次不提供風險判斷。
+本次錄影與動作分析仍已完成，可作為動作示範與體驗；下方提供一般性健康衛教。";
+            } else if (!inferenceAvailable || serverLevel === '無法評估') {
                 level = "無法評估";
                 levelColor = "var(--warning-color)";
                 advice = `【分析結果】本次未產出有效風險評估。${infer.message || '請確認影片已成功上傳，且人物完整入鏡。'}`;
@@ -1069,12 +1074,8 @@
             document.getElementById('resInfo').innerText = `受測者編號：${sid}`;
             const probEl = document.getElementById('resProb');
             probEl.innerText = inferenceAvailable ? `${pct}%` : '--';
-            if (infer.uncertain) {
-                const note = document.createElement('span');
-                note.style.fontSize = '0.35em';
-                note.innerText = '（僅供參考）';
-                probEl.appendChild(note);
-            }
+            // 結果不確定或年齡不適用時不顯示大字百分比，避免被當成可靠的分數。
+            probEl.style.display = infer.uncertain || infer.age_not_applicable ? 'none' : '';
             document.getElementById('resProb').style.color = levelColor;
             document.getElementById('resLevel').innerText = level;
             document.getElementById('resLevel').style.color = levelColor;

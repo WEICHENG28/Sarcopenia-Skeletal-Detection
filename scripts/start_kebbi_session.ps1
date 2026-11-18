@@ -83,8 +83,18 @@ if (-not $NoAdb) {
         $deviceLines = & $adbExe devices | Select-String -Pattern "^\S+\s+device$"
         if ($deviceLines.Count -eq 1) {
             & $adbExe reverse tcp:8000 tcp:8000 | Out-Null
-            & $adbExe shell am start -a android.intent.action.VIEW -d "http://127.0.0.1:8000/?kebbi=1" | Out-Null
-            Write-Host "凱比已連線，已設定 ADB reverse 並開啟正式檢測頁。"
+            # 優先開凱比專用 App：不受 Firefox 自動播放限制，也避免兩個頁面同時控制流程。
+            $kebbiApp = "tw.sarcopenia.kebbi"
+            $hasKebbiApp = (& $adbExe shell pm list packages $kebbiApp) -match "package:$kebbiApp$"
+            if ($hasKebbiApp) {
+                & $adbExe shell am force-stop org.mozilla.firefox | Out-Null
+                & $adbExe shell am force-stop $kebbiApp | Out-Null
+                & $adbExe shell monkey -p $kebbiApp -c android.intent.category.LAUNCHER 1 | Out-Null
+                Write-Host "凱比已連線，已設定 ADB reverse 並開啟肌少症篩檢 App。"
+            } else {
+                & $adbExe shell am start -a android.intent.action.VIEW -d "http://127.0.0.1:8000/?kebbi=1" | Out-Null
+                Write-Host "凱比已連線，已設定 ADB reverse 並以瀏覽器開啟正式檢測頁（首次需點「啟用語音」）。"
+            }
         } elseif ($deviceLines.Count -eq 0) {
             Write-Warning "目前沒有偵測到凱比。請開機並接上 USB 後，再執行 start_kebbi.bat。"
         } else {

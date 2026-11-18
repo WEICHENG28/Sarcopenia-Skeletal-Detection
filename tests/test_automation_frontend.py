@@ -351,3 +351,10 @@ def test_failed_action_is_retried_within_the_same_automated_round():
     assert "automationRetryCounts = {};" in source
     assert "await advanceAutomatedTest(null, token, { retry: true });" in source
     assert "[ACTION_RETRY_PROMPT]: '/static/tts/retry.mp3'" in source
+
+
+def test_result_page_hides_score_when_uncertain_or_below_awgs_age():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "if (infer.age_not_applicable) {" in source
+    assert "不適用（未滿 60 歲）" in source
+    assert "probEl.style.display = infer.uncertain || infer.age_not_applicable ? 'none' : '';" in source

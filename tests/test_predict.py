@@ -52,9 +52,15 @@ class TestProfileValidation:
         assert any("年齡" in w for w in warnings)
 
     def test_young_subject_warns_about_extrapolation(self):
-        """訓練族群為 69–88 歲，年輕受測者需提示外推限制。"""
-        warnings = _validate_profile({**VALID_PROFILE, "age": 30})
+        """訓練族群為 69–88 歲，60–64 歲受測者需提示外推限制。"""
+        warnings = _validate_profile({**VALID_PROFILE, "age": 62})
         assert any("訓練族群" in w for w in warnings)
+
+    def test_subject_below_awgs_age_gets_a_single_age_warning(self):
+        warnings = _validate_profile({**VALID_PROFILE, "age": 21})
+        age_warnings = [w for w in warnings if "年齡" in w]
+        assert len(age_warnings) == 1
+        assert "AWGS 2019" in age_warnings[0]
 
     def test_implausible_weight_warns(self):
         warnings = _validate_profile({**VALID_PROFILE, "weight_kg": 525})
@@ -128,12 +134,24 @@ class TestUncertainty:
         assert _uncertainty_reasons(0.90, ["Sit", "Walk"], [], VALID_PROFILE) == []
 
     def test_young_subject_is_uncertain(self):
-        reasons = _uncertainty_reasons(0.10, self.THREE, [], {**VALID_PROFILE, "age": 40})
+        reasons = _uncertainty_reasons(0.10, self.THREE, [], {**VALID_PROFILE, "age": 62})
         assert any("訓練族群" in r for r in reasons)
+
+    def test_subject_below_awgs_age_is_uncertain(self):
+        reasons = _uncertainty_reasons(0.10, self.THREE, [], {**VALID_PROFILE, "age": 40})
+        assert any("AWGS 2019" in r for r in reasons)
 
 
 @requires_models
 class TestPredictIntegration:
+    def test_subject_below_awgs_age_gets_no_risk_score(self, sample_paths):
+        result = predict({**VALID_PROFILE, "age": 21}, sample_paths)
+        assert result.ok
+        assert result.age_not_applicable
+        assert result.risk_probability is None
+        assert result.risk_level == "不適用"
+        assert result.uncertain
+
     def test_three_actions_succeeds(self, sample_paths):
         result = predict(VALID_PROFILE, sample_paths)
         assert result.ok
