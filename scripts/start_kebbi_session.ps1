@@ -89,8 +89,8 @@ if (-not $NoAdb) {
             if ($hasKebbiApp) {
                 & $adbExe shell am force-stop org.mozilla.firefox | Out-Null
                 & $adbExe shell am force-stop $kebbiApp | Out-Null
-                # monkey 會把參數回顯到 stderr，丟棄以免使用者誤以為出錯
-                & $adbExe shell monkey -p $kebbiApp -c android.intent.category.LAUNCHER 1 2>$null | Out-Null
+                # 用 am start 指定 Activity：monkey 會把參數寫到 stderr，在 $ErrorActionPreference=Stop 下會中斷腳本
+                & $adbExe shell am start -n "$kebbiApp/.MainActivity" | Out-Null
                 Write-Host "凱比已連線，已設定 ADB reverse 並開啟肌少症篩檢 App。"
             } else {
                 & $adbExe shell am start -a android.intent.action.VIEW -d "http://127.0.0.1:8000/?kebbi=1" | Out-Null
