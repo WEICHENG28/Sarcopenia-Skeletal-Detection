@@ -254,6 +254,9 @@ _archive/                   Phase 1~3 舊版程式碼（RandomForest / 1D-CNN �
 詳見 [RESULTS.md](RESULTS.md)。
 
 三系統共用同一份名冊、前處理與交叉驗證切分，各自獨立訓練與評估後並排比較。
+
+上表為加入人口學的 Stacking AUC。**展場上線系統採系統 B 的純骨架加權平均**
+（AUC 0.789、敏感度 0.750），不使用人口學；理由見 [docs/API_CONTRACT.md](docs/API_CONTRACT.md) 第 6 節。
 現階段不做加權合併（ensemble）——31 人的樣本量不足以支撐權重校準。
 
 每個系統內部 Sit / Walk / Squat 各訓練一個模型，

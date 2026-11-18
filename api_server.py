@@ -838,7 +838,7 @@ def health() -> Dict[str, Any]:
     """健康檢查：供部署時確認模型檔是否就緒。"""
     models_dir = BASE_DIR / "models"
     required = [
-        "metadata.json", "stacking.joblib",
+        "metadata.json",
         "stgcn_sit.pth", "stgcn_walk.pth", "stgcn_squat.pth",
     ]
     missing = [f for f in required if not (models_dir / f).exists()]
