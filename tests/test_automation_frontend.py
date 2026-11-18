@@ -383,9 +383,9 @@ def test_sit_posture_is_calibrated_before_the_start_cue():
     assert "baselineHipY !== null && phase === 'down' && repCount === 0" in source
 
 
-def test_kebbi_introduces_itself_when_audio_is_unlocked():
+def test_kebbi_greeting_is_recorded_and_not_the_old_confirmation():
     source = INDEX_PATH.read_text(encoding="utf-8")
-    assert "new Audio('/static/tts/greeting.mp3')" in source
+    assert "[KEBBI_GREETING]: '/static/tts/greeting.mp3'" in source
     assert "new Audio('/static/tts/good.mp3')" not in source
 
 

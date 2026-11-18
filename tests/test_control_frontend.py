@@ -13,7 +13,8 @@ def test_control_page_uses_qr_as_primary_identity_and_keeps_speech_fallback():
     assert "正式身分確認" in source
     assert "測試姓名備援" in source
     assert "scanning_qr: '掃描 QR Code'" in source
-    assert "['armed','scanning_qr','identifying','profile_loaded','testing']" in source
+    # 自動偵測待命（armed）時仍可手動開始，所以不列入忙碌狀態
+    assert "['scanning_qr','identifying','profile_loaded','testing']" in source
     assert "api('/speech/status')" in source
     assert "api('/speech/listen'" in source
     assert "purpose: 'name'" in source
