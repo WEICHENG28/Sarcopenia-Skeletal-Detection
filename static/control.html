@@ -32,6 +32,10 @@
         #testSpeechBtn { background: #fff; border-color: var(--border); color: var(--primary-strong); font-size: 17px; }
         #stopBtn { background: #fff; border-color: var(--danger); color: var(--danger); }
         button:disabled { opacity: .45; cursor: not-allowed; }
+        .auto-mode { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 10px; }
+        .auto-mode-note { margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+        #autoModeBtn { flex: none; background: #fff; border-color: var(--primary); color: var(--primary); font-size: 17px; }
+        #autoModeBtn.on { background: var(--primary); color: #fff; }
         .error { color: var(--danger); font-weight: 600; margin-top: 16px; min-height: 24px; }
         #speechResult { color: var(--primary-strong); font-weight: 600; margin-top: 16px; min-height: 24px; }
         .rehearsal-link { display: block; margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; text-align: center; font-size: 16px; font-weight: 600; text-decoration: none; background: #fff; color: var(--primary-strong); }
@@ -46,7 +50,7 @@
 <main>
     <section class="card">
         <h1>肌少症自動檢測控制台</h1>
-        <p class="note">先確認凱比已開啟正式檢測頁並啟用語音，再按下「啟動一輪檢測」。系統會立即開始掃描受測者編號 QR Code，凱比會說「請給我看您的 QR Code」；身分確認後再退到全身完整入鏡的位置，系統才會開始動作測試。</p>
+        <p class="note">先確認凱比已開啟正式檢測頁並啟用語音，再按「開啟自動偵測」讓凱比自動迎接受測者，或按「啟動一輪檢測」手動開始。開始後凱比會先自我介紹並開始掃描受測者編號 QR Code，凱比會說「請給我看您的 QR Code」；身分確認後再退到全身完整入鏡的位置，系統才會開始動作測試。</p>
         <div class="status">
             <div class="status-label">目前狀態</div>
             <div id="stateText">讀取中…</div>
@@ -57,6 +61,13 @@
                 <div>姓名備援語音：<strong id="speechText">檢查中…</strong></div>
                 <div>展場預檢：<strong id="preflightText">檢查中…</strong></div>
             </div>
+        </div>
+        <div class="auto-mode">
+            <div>
+                <strong>自動偵測</strong>：<span id="autoModeText">關閉</span>
+                <div class="auto-mode-note">開啟後，有人走到鏡頭前站定約 3 秒就自動開始；30 秒沒掃到 QR Code 或人離開 10 秒，會自動回到待命。誤入時按「立即停止」即可。</div>
+            </div>
+            <button id="autoModeBtn" onclick="toggleAutoMode()">開啟自動偵測</button>
         </div>
         <div class="actions">
             <button id="startBtn" onclick="startAutomation()">啟動一輪檢測</button>
@@ -72,13 +83,14 @@
 </main>
 <script>
     const STATE_LABELS = {
-        idle: '待機', armed: '等待受測者靠近', scanning_qr: '掃描 QR Code',
+        idle: '待機', armed: '自動偵測待命', scanning_qr: '掃描 QR Code',
         identifying: '舊版姓名辨識中',
         profile_loaded: '等待完整入鏡', testing: '動作測試中',
         completed: '本輪完成', error: '需要協助'
     };
     let speechTestRunning = false;
     let preflightReady = false;
+    let autoMode = false;
 
     async function api(path, options = {}) {
         const response = await fetch(path, options);
@@ -111,7 +123,14 @@
             document.getElementById('preflightText').textContent = preflight.ready
                 ? `必要項目通過${warningText}`
                 : `未通過：${preflight.blockers.join('、')}`;
-            const busy = ['armed','scanning_qr','identifying','profile_loaded','testing'].includes(state.state);
+            autoMode = Boolean(state.auto_mode);
+            document.getElementById('autoModeText').textContent = autoMode ? '開啟' : '關閉';
+            const autoBtn = document.getElementById('autoModeBtn');
+            autoBtn.textContent = autoMode ? '關閉自動偵測' : '開啟自動偵測';
+            autoBtn.classList.toggle('on', autoMode);
+            autoBtn.disabled = !autoMode && (!roster.ready || !preflight.ready);
+            // 待命中仍允許手動開始，自動偵測不順時可直接接手。
+            const busy = ['scanning_qr','identifying','profile_loaded','testing'].includes(state.state);
             document.getElementById('startBtn').disabled = !roster.ready || !preflight.ready || busy;
             document.getElementById('testSpeechBtn').disabled = !speech.available || busy || speechTestRunning;
         } catch (error) {
@@ -126,6 +145,12 @@
         }
         document.getElementById('startBtn').disabled = true;
         try { await api('/automation/start', { method: 'POST' }); }
+        catch (error) { document.getElementById('errorText').textContent = error.message; }
+        await refresh();
+    }
+
+    async function toggleAutoMode() {
+        try { await api(autoMode ? '/automation/disarm' : '/automation/arm', { method: 'POST' }); }
         catch (error) { document.getElementById('errorText').textContent = error.message; }
         await refresh();
     }

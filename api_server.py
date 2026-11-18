@@ -83,7 +83,7 @@ EXHIBITION_TTS_FILES = (
     "sit_ready.mp3", "walk_ready.mp3", "squat_ready.mp3", "pose_ready.mp3",
     "count_1.mp3", "count_2.mp3", "count_3.mp3", "count_4.mp3", "count_5.mp3",
     "start.mp3", "end.mp3", "enter_frame.mp3", "hold.mp3", "good.mp3", "greeting.mp3",
-    "qr_prompt.mp3",
+    "qr_prompt.mp3", "chime.wav",
     "complete_5.mp3", "movement_stopped.mp3", "squat_recorded.mp3",
     "walk_arrived.mp3", "retry.mp3", "analysis.mp3",
 )
@@ -119,6 +119,14 @@ class AutomationFailure(BaseModel):
     participant_id: str | None = Field(default=None, max_length=64)
 
 
+class AutomationStandby(BaseModel):
+    """自動偵測模式下，把一輪流程安靜地交回待命狀態。"""
+
+    message: str = Field(min_length=1, max_length=200)
+    expected_state: Literal["scanning_qr", "profile_loaded", "completed", "error"]
+    expected_revision: int = Field(ge=0)
+
+
 class ClinicianReviewRequest(BaseModel):
     participant_id: str = Field(min_length=1, max_length=64)
     assessment: Literal[
@@ -138,6 +146,8 @@ _automation_state: Dict[str, Any] = {
     "message": "尚未啟動",
     "participant": None,
     "updated_at": datetime.now().isoformat(timespec="seconds"),
+    # 自動偵測模式：有人走近並站定就自動開始；中止或結束後回到待命而非停止。
+    "auto_mode": False,
 }
 
 
@@ -661,16 +671,39 @@ def automation_state() -> Dict[str, Any]:
     return get_automation_state()
 
 
-@app.post("/automation/start")
-def start_automation() -> Dict[str, Any]:
+def _require_ready_to_run() -> None:
     roster = participant_roster_status()
     if not roster["ready"]:
         raise HTTPException(409, f"無法啟動：{roster['message']}")
     if camera.get_frame(timeout=0.5) is None:
         raise HTTPException(409, "無法啟動：C922 尚未產生畫面")
-    # QR scanning starts immediately and stays silent. Full-body framing is
-    # intentionally deferred until after identity has been confirmed.
+
+
+@app.post("/automation/start")
+def start_automation() -> Dict[str, Any]:
+    _require_ready_to_run()
+    # Full-body framing is intentionally deferred until after identity has
+    # been confirmed.
     return _set_automation_state("scanning_qr", "已啟動 QR Code 掃描")
+
+
+@app.post("/automation/arm")
+def arm_automation() -> Dict[str, Any]:
+    _require_ready_to_run()
+    with _automation_lock:
+        _automation_state["auto_mode"] = True
+    return _set_automation_state("armed", "自動偵測待命中：有人走近並站定後會自動開始")
+
+
+@app.post("/automation/disarm")
+def disarm_automation() -> Dict[str, Any]:
+    with _automation_lock:
+        _automation_state["auto_mode"] = False
+    current = get_automation_state()
+    if current["state"] != "armed":
+        # 不打斷進行中的一輪，只是結束後不再自動回到待命。
+        return current
+    return _set_automation_state("idle", "已關閉自動偵測")
 
 
 @app.post("/automation/stop")
@@ -680,7 +713,25 @@ def stop_automation() -> Dict[str, Any]:
             camera.stop_recording()
         except RuntimeError:
             pass
+    if get_automation_state()["auto_mode"]:
+        return _set_automation_state("armed", "已中止本輪，回到自動偵測待命")
     return _set_automation_state("idle", "已由電腦端停止")
+
+
+@app.post("/automation/standby")
+def automation_standby(request: AutomationStandby) -> Dict[str, Any]:
+    current = get_automation_state()
+    if not current["auto_mode"]:
+        raise HTTPException(409, "目前不是自動偵測模式")
+    state = _set_automation_state_if_current(
+        request.expected_state,
+        request.expected_revision,
+        "armed",
+        request.message,
+    )
+    if state is None:
+        raise HTTPException(409, "自動流程狀態已改變，忽略回到待命")
+    return state
 
 
 @app.post("/automation/person-detected")

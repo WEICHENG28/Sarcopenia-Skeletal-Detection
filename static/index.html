@@ -1117,6 +1117,7 @@
 
         // ── 顯示結果 ──────────────────────────────────────────────
         function showResult(sid, data) {
+            automationResultShownAt = performance.now() / 1000;
             // 風險機率在 inference_result 內層
             const infer = data.inference_result ?? {};
             const rawProbability = infer.risk_probability;
@@ -1383,6 +1384,9 @@
 
         function evaluatePose(result, nowSec) {
             const landmarks = result.landmarks && result.landmarks[0];
+            if (landmarks) lastPersonSeenSec = nowSec;
+            handleAutoStart(landmarks, nowSec);
+            checkAutoStandby(nowSec);
             const presenceFramingOk = checkFraming(landmarks);
             const actionFramingOk = ['sit', 'walk'].includes(currentRecordingActionId)
                 ? checkSitToStandFraming(landmarks)
@@ -1573,6 +1577,23 @@
         const POST_TTS_LISTEN_DELAY_MS = 800;
         const MANUAL_NAME_FALLBACK_DELAY_MS = 12000;
         const QR_PROMPT = '請給我看您的 QR Code。';
+        const KEBBI_GREETING = '您好，我是肌少症預防守護者，凱比。今天由我陪您做檢測。';
+        // 自動偵測：有人站在鏡頭前（肩寬夠大，代表夠近）並站定一段時間才開始，
+        // 背景走過的人不會觸發。誤觸發時由自動取消或工作人員「立即停止」回到待命。
+        const AUTO_START_STILL_SEC = 2.5;
+        const AUTO_START_MIN_SHOULDER_SPAN = 0.12;
+        const AUTO_START_MAX_MOTION = 0.03;
+        const AUTO_CANCEL_NO_QR_MS = 30000;
+        const AUTO_CANCEL_ABSENT_SEC = 10;
+        const AUTO_RESULT_HOLD_MAX_SEC = 90;
+        // 回到待命後，畫面需淨空這麼久才允許下一次觸發，避免剛中止的人立刻又觸發。
+        const AUTO_CLEAR_SEC = 1.5;
+        let lastPersonSeenSec = 0;
+        let autoStartSince = null;
+        let autoStartLastCenter = null;
+        let armedNeedsClear = true;
+        let autoStandbyRequested = false;
+        let automationResultShownAt = null;
         let speechCaptureActive = false;
         const RECORDED_PROMPTS = Object.freeze({
             '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
@@ -1602,6 +1623,7 @@
             '已到達終點，錄影即將結束': '/static/tts/walk_arrived.mp3',
             '三項動作已完成，正在進行分析，請稍候。': '/static/tts/analysis.mp3',
             [QR_PROMPT]: '/static/tts/qr_prompt.mp3',
+            [KEBBI_GREETING]: '/static/tts/greeting.mp3',
         });
 
         async function requestJson(path, options = {}, timeoutMs = 8000) {
@@ -1660,6 +1682,7 @@
 
         function prepareAutomationCycle() {
             cancelPendingActionReadiness();
+            automationResultShownAt = null;
             videoData = { sit: null, walk: null, squat: null };
             ['subjectId', 'age', 'height', 'weight'].forEach(id => {
                 document.getElementById(id).value = '';
@@ -1713,9 +1736,14 @@
                 if (state.state === 'idle' && previousState !== 'idle') {
                     cancelLocalAutomation();
                     setBanner('', null);
-                } else if (state.state === 'armed' && !currentRecordingActionId) {
-                    if (previousState !== 'armed') prepareAutomationCycle();
-                    setBanner('請靠近鏡頭；偵測到受測者後會自動提示掃描 QR Code', 'info');
+                } else if (state.state === 'armed') {
+                    if (previousState !== 'armed') {
+                        cancelLocalAutomation();
+                        prepareAutomationCycle();
+                        armedNeedsClear = true;
+                        autoStandbyRequested = false;
+                    }
+                    setBanner('自動偵測待命中：請走到鏡頭前站好', 'info');
                 } else if (state.state === 'scanning_qr') {
                     // 新一輪流程現在會從 idle 直接進入 QR 掃描；首次進入時
                     // 必須清除上一位的表單、影片與動作狀態，避免展場畫面
@@ -1737,6 +1765,78 @@
                 }
             } catch (error) {
                 document.getElementById('automationMessage').textContent = `控制連線失敗：${error.message}`;
+            }
+        }
+
+        function handleAutoStart(landmarks, nowSec) {
+            if (!isActiveAutomationTab || automationServerState.state !== 'armed' || !kebbiAudioReady) {
+                autoStartSince = null;
+                return;
+            }
+            if (!landmarks) {
+                autoStartSince = null;
+                if (nowSec - lastPersonSeenSec >= AUTO_CLEAR_SEC) armedNeedsClear = false;
+                return;
+            }
+            if (armedNeedsClear) return;
+            const left = landmarks[LANDMARK.L_SHOULDER];
+            const right = landmarks[LANDMARK.R_SHOULDER];
+            const near = landmarkIsInFrame(left) && landmarkIsInFrame(right)
+                && Math.abs(left.x - right.x) >= AUTO_START_MIN_SHOULDER_SPAN;
+            const center = near ? { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 } : null;
+            const moving = center && autoStartLastCenter
+                && Math.hypot(center.x - autoStartLastCenter.x, center.y - autoStartLastCenter.y)
+                    > AUTO_START_MAX_MOTION;
+            autoStartLastCenter = center;
+            if (!near || moving) {
+                autoStartSince = null;
+                return;
+            }
+            if (autoStartSince === null) autoStartSince = nowSec;
+            if (nowSec - autoStartSince < AUTO_START_STILL_SEC) return;
+            autoStartSince = null;
+            armedNeedsClear = true;
+            requestJson('/automation/person-detected', { method: 'POST' })
+                .then(state => {
+                    automationServerState = state;
+                    updateAutomationPanel(state);
+                })
+                .catch(error => console.warn('自動開始失敗：', error));
+        }
+
+        function checkAutoStandby(nowSec) {
+            const state = automationServerState;
+            if (!isActiveAutomationTab || !state.auto_mode || autoStandbyRequested
+                || automationSequenceActive || currentRecordingActionId) return;
+            const absent = nowSec - lastPersonSeenSec >= AUTO_CANCEL_ABSENT_SEC;
+            if (['scanning_qr', 'profile_loaded', 'error'].includes(state.state) && absent) {
+                void returnToAutoStandby('受測者已離開，回到待命');
+            } else if (state.state === 'completed' && automationResultShownAt !== null
+                       && (absent || nowSec - automationResultShownAt >= AUTO_RESULT_HOLD_MAX_SEC)) {
+                // 只在結果已顯示後才回到待命，避免分析途中清掉畫面。
+                void returnToAutoStandby('本輪完成，等待下一位');
+            }
+        }
+
+        // 只通知伺服器；畫面重置交給 pollAutomationState 進入 armed 時統一處理。
+        async function returnToAutoStandby(message) {
+            const state = automationServerState;
+            if (!state.auto_mode || autoStandbyRequested) return;
+            autoStandbyRequested = true;
+            try {
+                await requestJson('/automation/standby', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message,
+                        expected_state: state.state,
+                        expected_revision: state.revision,
+                    })
+                });
+            } catch (error) {
+                console.warn('回到待命失敗：', error);
+            } finally {
+                autoStandbyRequested = false;
             }
         }
 
@@ -2189,8 +2289,16 @@
                 );
             }, MANUAL_NAME_FALLBACK_DELAY_MS);
             setBanner('▣ 請將受測者 QR Code 對準 C922', 'info');
-            // QR 掃描不使用麥克風，可以播放提示；不等待播完，掃描立即開始。
+            // 每一輪都先自我介紹再請受測者出示 QR Code。QR 掃描不使用麥克風，
+            // 語音與掃描同時進行，不必等播完。
+            lastPersonSeenSec = performance.now() / 1000;
+            void queueSpeech(KEBBI_GREETING, { minimumMs: 300 });
             void queueSpeech(QR_PROMPT, { minimumMs: 300 });
+            const noQrTimer = setTimeout(() => {
+                if (token !== identityFlowToken || automationServerState.state !== 'scanning_qr') return;
+                if (document.getElementById('manualNameInput').value.trim()) return;
+                void returnToAutoStandby('30 秒內沒有掃到 QR Code，回到待命');
+            }, AUTO_CANCEL_NO_QR_MS);
             document.getElementById('automationMessage').textContent =
                 '正在由電腦端 C922 掃描 QR Code；QR 僅含受測者編號。';
             try {
@@ -2227,6 +2335,7 @@
                     `QR 掃描暫時無法使用（${error.message}），可輸入名冊姓名備援。`;
             } finally {
                 clearTimeout(fallbackTimer);
+                clearTimeout(noQrTimer);
                 if (token === identityFlowToken) identityFlowRunning = false;
             }
         }
@@ -2427,8 +2536,8 @@
             speechEnabled = true;
             speechButton.classList.add('active');
             speechButton.textContent = '語音提示：開';
-            // 開啟頁面時的語音解鎖同時作為凱比的自我介紹。
-            const confirmation = new Audio('/static/tts/greeting.mp3');
+            // 開啟頁面時只播短提示音解鎖語音；自我介紹改在每一輪開始時播放。
+            const confirmation = new Audio('/static/tts/chime.wav');
             confirmation.preload = 'auto';
             try {
                 await confirmation.play();
