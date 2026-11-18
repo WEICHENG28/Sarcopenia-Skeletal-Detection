@@ -1484,6 +1484,7 @@
         // 這可避免凱比喇叭的尾音被自己的麥克風收進姓名錄音。
         const POST_TTS_LISTEN_DELAY_MS = 800;
         const MANUAL_NAME_FALLBACK_DELAY_MS = 12000;
+        const QR_PROMPT = '請給我看您的 QR Code。';
         let speechCaptureActive = false;
         const RECORDED_PROMPTS = Object.freeze({
             '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
@@ -1512,6 +1513,7 @@
             '半蹲動作已記錄，錄影即將結束': '/static/tts/squat_recorded.mp3',
             '已到達終點，錄影即將結束': '/static/tts/walk_arrived.mp3',
             '三項動作已完成，正在進行分析，請稍候。': '/static/tts/analysis.mp3',
+            [QR_PROMPT]: '/static/tts/qr_prompt.mp3',
         });
 
         async function requestJson(path, options = {}, timeoutMs = 8000) {
@@ -2099,6 +2101,8 @@
                 );
             }, MANUAL_NAME_FALLBACK_DELAY_MS);
             setBanner('▣ 請將受測者 QR Code 對準 C922', 'info');
+            // QR 掃描不使用麥克風，可以播放提示；不等待播完，掃描立即開始。
+            void queueSpeech(QR_PROMPT, { minimumMs: 300 });
             document.getElementById('automationMessage').textContent =
                 '正在由電腦端 C922 掃描 QR Code；QR 僅含受測者編號。';
             try {
