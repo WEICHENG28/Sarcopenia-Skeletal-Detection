@@ -65,6 +65,12 @@ VISIBILITY_THRESHOLD = 0.5
 # 低於此比例的可見關節時，該動作的結果標記為低可信度
 LOW_CONFIDENCE_VISIBILITY = 0.80
 
+# 平均可見度會被清楚的時段稀釋，因此另外檢查「下半身看不到」的影格比例。
+# 訓練資料中被遮擋幀比例最高為行走的 7.7%（見 results/data_health_report.md）。
+LOWER_BODY_LANDMARKS = (23, 24, 25, 26, 27, 28)
+OCCLUDED_FRAME_VISIBILITY = 0.5
+MAX_OCCLUDED_FRAME_RATIO = 0.20
+
 # 少於此影格數視為拍攝失敗。訓練資料中最短的樣本為 93 幀（約 3.1 秒），
 # 低於 30 幀（1 秒）不足以涵蓋任何一個完整動作週期。
 MIN_USABLE_FRAMES = 30
@@ -94,6 +100,7 @@ class ActionResult:
     weight: float = 0.0
     frames: int = 0
     visibility_mean: float = 0.0
+    occluded_ratio: float = 0.0
     low_confidence: bool = False
     reason: str = "ok"
 
@@ -184,8 +191,8 @@ def _missing_actions_message(used: Sequence[str], known: Sequence[str]) -> str:
 
 def _low_visibility_message(low_quality: Sequence[str]) -> str:
     return (
-        f"下列動作的關節可見度偏低，座標多為系統推測值，結果可信度較低："
-        f"{', '.join(low_quality)}"
+        f"下列動作的關節可見度偏低或有一段時間下半身不在畫面內，"
+        f"座標多為系統推測值，結果可信度較低：{', '.join(low_quality)}"
     )
 
 
@@ -317,6 +324,8 @@ def _infer_action(
         ), None
 
     visibility = float(raw[..., 3].mean())
+    lower_body_visibility = raw[:, LOWER_BODY_LANDMARKS, 3].mean(axis=1)
+    occluded_ratio = float((lower_body_visibility < OCCLUDED_FRAME_VISIBILITY).mean())
     normalized = normalize_sequence(raw)
     resampled = resample_time(normalized, metadata["target_frames"][action])
     tensor = to_model_tensor(resampled)
@@ -336,7 +345,11 @@ def _infer_action(
             weight=weight,
             frames=int(raw.shape[0]),
             visibility_mean=round(visibility, 4),
-            low_confidence=visibility < LOW_CONFIDENCE_VISIBILITY,
+            occluded_ratio=round(occluded_ratio, 4),
+            low_confidence=(
+                visibility < LOW_CONFIDENCE_VISIBILITY
+                or occluded_ratio > MAX_OCCLUDED_FRAME_RATIO
+            ),
         ),
         importance["node_importance"][0].numpy(),
     )
