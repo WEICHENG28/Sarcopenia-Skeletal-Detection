@@ -77,7 +77,10 @@ def test_disarm_does_not_interrupt_a_running_round():
 def test_kebbi_page_auto_starts_only_for_a_near_still_person():
     source = INDEX_PATH.read_text(encoding="utf-8")
     assert "function handleAutoStart(landmarks, nowSec)" in source
-    assert "Math.abs(left.x - right.x) >= AUTO_START_MIN_SHOULDER_SPAN" in source
+    assert "const near = personInView(landmarks, AUTO_START_MIN_SHOULDER_SPAN);" in source
+    # 空房間的誤判小骨架不算有人，否則無法淨空、也無法因人離開而回到待命
+    assert "if (personInView(landmarks)) lastPersonSeenSec = nowSec;" in source
+    assert "if (!personInView(landmarks)) {" in source
     assert "requestJson('/automation/person-detected', { method: 'POST' })" in source
     # 回到待命後畫面要先淨空，剛被中止的人不會立刻再觸發
     assert "if (nowSec - lastPersonSeenSec >= AUTO_CLEAR_SEC) armedNeedsClear = false;" in source
