@@ -93,6 +93,7 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
         "movement_stopped.mp3",
         "squat_recorded.mp3",
         "walk_arrived.mp3",
+        "retry.mp3",
         "analysis.mp3",
     }
     assert {path.name for path in TTS_PATH.glob("*.mp3")} == expected
@@ -341,3 +342,12 @@ def test_webcam_preview_restarts_when_page_becomes_visible_again():
     source = INDEX_PATH.read_text(encoding="utf-8")
     assert "function loadNextWebcamFrame()" in source
     assert "if (claimAutomationTab()) loadNextWebcamFrame();" in source
+
+
+def test_failed_action_is_retried_within_the_same_automated_round():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "const MAX_AUTOMATED_ACTION_RETRIES = 2;" in source
+    assert source.count("if (retryCurrentAutomatedAction(actionId)) return;") == 2
+    assert "automationRetryCounts = {};" in source
+    assert "await advanceAutomatedTest(null, token, { retry: true });" in source
+    assert "[ACTION_RETRY_PROMPT]: '/static/tts/retry.mp3'" in source

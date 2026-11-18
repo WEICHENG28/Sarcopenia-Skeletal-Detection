@@ -84,7 +84,7 @@ EXHIBITION_TTS_FILES = (
     "count_1.mp3", "count_2.mp3", "count_3.mp3", "count_4.mp3", "count_5.mp3",
     "start.mp3", "end.mp3", "enter_frame.mp3", "hold.mp3", "good.mp3",
     "complete_5.mp3", "movement_stopped.mp3", "squat_recorded.mp3",
-    "walk_arrived.mp3", "analysis.mp3",
+    "walk_arrived.mp3", "retry.mp3", "analysis.mp3",
 )
 _ROSTER_HEADERS = {
     "participant_id", "name", "name_aliases", "age",

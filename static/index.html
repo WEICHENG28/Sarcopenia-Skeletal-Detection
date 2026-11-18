@@ -596,6 +596,10 @@
         let automationSequenceActive = false;
         let automationActionIndex = -1;
         let automationRunToken = 0;
+        // 單項動作未完成時，先在同一輪自動重做，避免整輪中斷後語音引導停止。
+        const MAX_AUTOMATED_ACTION_RETRIES = 2;
+        const ACTION_RETRY_PROMPT = '這次沒有完成，我們再試一次。';
+        let automationRetryCounts = {};
         let pendingActionReadiness = null;
         let activePromptAudio = null;
         let screenWakeLock = null;
@@ -800,6 +804,7 @@
                     setBanner(`起立坐下只辨識到 ${stoppedRepCount} 下，不會送入 AI 分析`, 'warn');
                     setStatus('Sit', 'error', `未完成 ${stoppedRepCount}/${REP_TARGET.sit}`);
                     if (automationSequenceActive) {
+                        if (retryCurrentAutomatedAction(actionId)) return;
                         automationSequenceActive = false;
                         await reportAutomationFailure(
                             `起立坐下未完成：只辨識到 ${stoppedRepCount}/${REP_TARGET.sit} 下，請調整站位後重新開始`,
@@ -815,6 +820,7 @@
                     setBanner('行走測試未辨識到穩定終點，不會送入 AI 分析', 'warn');
                     setStatus('Walk', 'error', '未到達終點');
                     if (automationSequenceActive) {
+                        if (retryCurrentAutomatedAction(actionId)) return;
                         automationSequenceActive = false;
                         await reportAutomationFailure(
                             '行走測試未在時間內到達穩定終點，請調整站位後重新開始',
@@ -1474,6 +1480,7 @@
             '很好': '/static/tts/good.mp3',
             '已完成5下，錄影即將結束': '/static/tts/complete_5.mp3',
             '偵測到動作已停止，錄影即將結束': '/static/tts/movement_stopped.mp3',
+            [ACTION_RETRY_PROMPT]: '/static/tts/retry.mp3',
             '半蹲動作已記錄，錄影即將結束': '/static/tts/squat_recorded.mp3',
             '已到達終點，錄影即將結束': '/static/tts/walk_arrived.mp3',
             '三項動作已完成，正在進行分析，請稍候。': '/static/tts/analysis.mp3',
@@ -2167,6 +2174,7 @@
             if (automationSequenceActive) return;
             automationSequenceActive = true;
             automationActionIndex = -1;
+            automationRetryCounts = {};
             const token = ++automationRunToken;
             try {
                 const state = await requestJson('/automation/testing', {
@@ -2183,7 +2191,27 @@
             }
         }
 
-        async function advanceAutomatedTest(finishedActionId, token = automationRunToken) {
+        function retryCurrentAutomatedAction(actionId, token = automationRunToken) {
+            if (AUTOMATED_ACTIONS[automationActionIndex]?.id !== actionId) return false;
+            const used = automationRetryCounts[actionId] || 0;
+            if (used >= MAX_AUTOMATED_ACTION_RETRIES) return false;
+            automationRetryCounts[actionId] = used + 1;
+            // advanceAutomatedTest 會先遞增索引，所以退回一格以重做同一項。
+            automationActionIndex--;
+            void (async () => {
+                setBanner(`${ACTION_LABEL[actionId]}：第 ${used + 1} 次重試`, 'warn');
+                await speakAsync(ACTION_RETRY_PROMPT, { minimumMs: 1500 });
+                await advanceAutomatedTest(null, token, { retry: true });
+            })().catch(error => {
+                automationSequenceActive = false;
+                void reportAutomationFailure(`自動測試無法繼續：${error.message}`);
+            });
+            return true;
+        }
+
+        async function advanceAutomatedTest(
+            finishedActionId, token = automationRunToken, { retry = false } = {}
+        ) {
             if (!automationSequenceActive || token !== automationRunToken) return;
             if (finishedActionId && AUTOMATED_ACTIONS[automationActionIndex]?.id !== finishedActionId) return;
             if (finishedActionId) {
@@ -2217,9 +2245,12 @@
             }
 
             const step = AUTOMATED_ACTIONS[automationActionIndex];
-            setBanner(`下一項：${ACTION_LABEL[step.id]}`, 'info');
-            await speakAsync(step.prompt, { minimumMs: 5000 });
-            if (!automationSequenceActive || token !== automationRunToken) return;
+            setBanner(`${retry ? '重做' : '下一項'}：${ACTION_LABEL[step.id]}`, 'info');
+            // 重試時不重播整段說明，只保留就緒提示與倒數。
+            if (!retry) {
+                await speakAsync(step.prompt, { minimumMs: 5000 });
+                if (!automationSequenceActive || token !== automationRunToken) return;
+            }
             await speakAsync(step.readyPrompt, { minimumMs: 1800 });
             if (!automationSequenceActive || token !== automationRunToken) return;
             const ready = await waitForActionReadiness(step, token);
