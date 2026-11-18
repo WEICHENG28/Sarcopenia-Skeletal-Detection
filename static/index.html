@@ -601,6 +601,8 @@
         const ACTION_RETRY_PROMPT = '這次沒有完成，我們再試一次。';
         let automationRetryCounts = {};
         let pendingActionReadiness = null;
+        // 起立坐下在就緒檢查與倒數期間先完成坐姿校正，聽到「開始」即可直接站起。
+        let preparedSitCounter = null;
         let activePromptAudio = null;
         let screenWakeLock = null;
 
@@ -865,7 +867,11 @@
             live.recordStart = performance.now() / 1000;
             setBanner('', null);
             if (actionId === 'sit') {
-                setBadge(`0 / ${REP_TARGET.sit} 下 · 請先坐穩，正在校正坐姿`);
+                const prepared = takePreparedSitCounter();
+                if (prepared) live.sitCounter = prepared;
+                setBadge(prepared
+                    ? `0 / ${REP_TARGET.sit} 下 · 已辨識坐姿，請開始`
+                    : `0 / ${REP_TARGET.sit} 下 · 請先坐穩，正在校正坐姿`);
                 live.timedStopHandle = setTimeout(() => {
                     if (currentRecordingActionId !== 'sit' || !isRecording
                         || live.autoStopTriggered) return;
@@ -1327,6 +1333,9 @@
 
             // 未完整入鏡時只提示，不把局部身體晃動計成一次動作。
             // 這能避免人物靠鏡頭過近時，髖部位移造成錯誤加一。
+            if (!currentRecordingActionId && preparedSitCounter && checkSitToStandFraming(landmarks)) {
+                preparedSitCounter.update(window.SitToStandCounter.computeMetrics(landmarks));
+            }
             if (!currentRecordingActionId || !landmarks || !actionFramingOk) return;
 
             const elapsed = nowSec - live.recordStart;
@@ -1676,8 +1685,20 @@
             };
         }
 
+        // 只沿用「已校正且仍在坐姿、尚未計次」的計數器；倒數期間若起身就重新校正。
+        function takePreparedSitCounter() {
+            const counter = preparedSitCounter;
+            preparedSitCounter = null;
+            if (!counter) return null;
+            const { baselineHipY, phase, repCount } = counter.state;
+            return baselineHipY !== null && phase === 'down' && repCount === 0 ? counter : null;
+        }
+
         function waitForActionReadiness(step, token) {
             cancelPendingActionReadiness();
+            preparedSitCounter = step.id === 'sit'
+                ? window.SitToStandCounter?.createCounter() ?? null
+                : null;
             const elements = readinessElements();
             elements.card.hidden = false;
             elements.title.textContent = `${ACTION_LABEL[step.id]}：等待就緒`;

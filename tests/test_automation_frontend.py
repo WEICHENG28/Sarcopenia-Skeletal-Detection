@@ -368,3 +368,11 @@ def test_walk_requires_standing_still_and_fails_when_leaving_frame():
     assert "void autoStopCurrentRecording('走出畫面', 'warn');" in source
     # 到達後立即停止錄影，不等語音播完
     assert ".then(() => autoStopCurrentRecording('已到達終點定位'))" not in source
+
+
+def test_sit_posture_is_calibrated_before_the_start_cue():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "let preparedSitCounter = null;" in source
+    assert "preparedSitCounter.update(window.SitToStandCounter.computeMetrics(landmarks));" in source
+    assert "const prepared = takePreparedSitCounter();" in source
+    assert "baselineHipY !== null && phase === 'down' && repCount === 0" in source
