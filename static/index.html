@@ -2335,7 +2335,8 @@
             speechEnabled = true;
             speechButton.classList.add('active');
             speechButton.textContent = '🔊 語音提示：開';
-            const confirmation = new Audio('/static/tts/good.mp3');
+            // 開啟頁面時的語音解鎖同時作為凱比的自我介紹。
+            const confirmation = new Audio('/static/tts/greeting.mp3');
             confirmation.preload = 'auto';
             try {
                 await confirmation.play();
