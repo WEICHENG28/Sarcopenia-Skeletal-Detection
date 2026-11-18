@@ -90,6 +90,7 @@ def test_recorded_traditional_chinese_prompts_are_packaged():
         "hold.mp3",
         "good.mp3",
         "greeting.mp3",
+        "qr_prompt.mp3",
         "complete_5.mp3",
         "movement_stopped.mp3",
         "squat_recorded.mp3",
@@ -386,3 +387,10 @@ def test_kebbi_introduces_itself_when_audio_is_unlocked():
     source = INDEX_PATH.read_text(encoding="utf-8")
     assert "new Audio('/static/tts/greeting.mp3')" in source
     assert "new Audio('/static/tts/good.mp3')" not in source
+
+
+def test_qr_stage_asks_for_the_qr_code_without_blocking_the_scan():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "const QR_PROMPT = '請給我看您的 QR Code。';" in source
+    assert "[QR_PROMPT]: '/static/tts/qr_prompt.mp3'" in source
+    assert "void queueSpeech(QR_PROMPT, { minimumMs: 300 });" in source
