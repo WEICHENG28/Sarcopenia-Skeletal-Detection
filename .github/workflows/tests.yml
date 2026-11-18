@@ -31,4 +31,4 @@ jobs:
         with:
           node-version: "22"
       - name: Test action readiness and sit-to-stand counting
-        run: node --test tests/action_readiness.test.js tests/sit_to_stand_counter.test.js
+        run: node --test tests/action_readiness.test.js tests/sit_to_stand_counter.test.js tests/inline_scripts.test.js
