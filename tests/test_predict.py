@@ -152,6 +152,22 @@ class TestPredictIntegration:
         assert result.risk_level == "不適用"
         assert result.uncertain
 
+    def test_lower_body_leaving_frame_marks_action_low_confidence(self, sample_paths, tmp_path):
+        """平均可見度可能仍高，但後段下半身離開畫面時必須標記低可信度。"""
+        frames = json.loads(Path(sample_paths["Walk"]).read_text(encoding="utf-8"))
+        cut_from = int(len(frames) * 0.6)
+        for frame in frames[cut_from:]:
+            for index in range(23, 33):
+                frame[index]["visibility"] = 0.05
+        cut_path = tmp_path / "cut_Walk.json"
+        cut_path.write_text(json.dumps(frames), encoding="utf-8")
+
+        result = predict(VALID_PROFILE, {**sample_paths, "Walk": str(cut_path)})
+        walk = result.per_action["Walk"]
+        assert walk["occluded_ratio"] > 0.2
+        assert walk["low_confidence"]
+        assert any("下半身不在畫面內" in w for w in result.warnings)
+
     def test_three_actions_succeeds(self, sample_paths):
         result = predict(VALID_PROFILE, sample_paths)
         assert result.ok

@@ -1186,6 +1186,10 @@
         const SIT_MAX_RECORD_MS = 60000;
         const WALK_TARGET_DISPLACEMENT = 0.16;
         const WALK_TARGET_STABLE_FRAMES = 2;
+        // 到達距離後還要站定：相鄰兩次偵測的髖部位移低於此值才算停下。
+        const WALK_STILL_MOTION = 0.012;
+        // 行走中持續看不到下半身超過此秒數，視為走出畫面，這次不列入分析。
+        const WALK_OUT_OF_FRAME_FAIL_SEC = 2.0;
         const WALK_MAX_RECORD_MS = 30000;
         const SQUAT_RECORD_MS = 4000;
         const POSE_DETECT_INTERVAL_MS = 350;
@@ -1208,6 +1212,7 @@
                 autoStopTriggered: false,
                 actionCompleted: false,
                 walkOrigin: null,
+                walkLastCenter: null,
                 walkTargetFrames: 0,
                 timedStopHandle: null,
             };
@@ -1306,6 +1311,13 @@
                         speak('請完整入鏡');
                     }
                 }
+                if (currentRecordingActionId === 'walk' && live.walkOrigin && !live.autoStopTriggered
+                    && nowSec - live.outOfFrameSince >= WALK_OUT_OF_FRAME_FAIL_SEC) {
+                    // 已開始行走後走出畫面：停止並標記未完成，交由自動重試重錄。
+                    live.autoStopTriggered = true;
+                    setBanner('已走出畫面，這次行走不列入分析', 'warn');
+                    void autoStopCurrentRecording('走出畫面', 'warn');
+                }
             } else if (fullBodyRequired) {
                 live.outOfFrameSince = null;
                 if (!currentRecordingActionId) setBanner('', null);
@@ -1372,7 +1384,13 @@
                 centerX - live.walkOrigin.x,
                 centerY - live.walkOrigin.y
             );
+            const motion = live.walkLastCenter
+                ? Math.hypot(centerX - live.walkLastCenter.x, centerY - live.walkLastCenter.y)
+                : Infinity;
+            live.walkLastCenter = { x: centerX, y: centerY };
+            // 只走到距離還不夠，必須在終點站定；否則受測者仍在行走時就判定到達，會繼續走出畫面。
             live.walkTargetFrames = displacement >= WALK_TARGET_DISPLACEMENT
+                && motion <= WALK_STILL_MOTION
                 ? live.walkTargetFrames + 1 : 0;
             setBadge(`走向終點 · ${Math.min(100, Math.round(
                 displacement / WALK_TARGET_DISPLACEMENT * 100
@@ -1382,8 +1400,9 @@
             live.autoStopTriggered = true;
             live.actionCompleted = true;
             setBanner('✅ 已到達終點定位，即將結束錄影', 'ok');
-            void queueSpeech('已到達終點，錄影即將結束', { minimumMs: 500 })
-                .then(() => autoStopCurrentRecording('已到達終點定位'));
+            // 站定後立即停止錄影、同時播報，避免播報期間人物移動造成影片後段缺漏。
+            void queueSpeech('已到達終點，錄影即將結束', { minimumMs: 500 });
+            void autoStopCurrentRecording('已到達終點定位');
         }
 
         function onRepCounted(actionId, count) {

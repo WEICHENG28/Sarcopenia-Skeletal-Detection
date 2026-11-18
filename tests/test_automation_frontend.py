@@ -358,3 +358,13 @@ def test_result_page_hides_score_when_uncertain_or_below_awgs_age():
     assert "if (infer.age_not_applicable) {" in source
     assert "不適用（未滿 60 歲）" in source
     assert "probEl.style.display = infer.uncertain || infer.age_not_applicable ? 'none' : '';" in source
+
+
+def test_walk_requires_standing_still_and_fails_when_leaving_frame():
+    source = INDEX_PATH.read_text(encoding="utf-8")
+    assert "const WALK_STILL_MOTION = 0.012;" in source
+    assert "&& motion <= WALK_STILL_MOTION" in source
+    assert "const WALK_OUT_OF_FRAME_FAIL_SEC = 2.0;" in source
+    assert "void autoStopCurrentRecording('走出畫面', 'warn');" in source
+    # 到達後立即停止錄影，不等語音播完
+    assert ".then(() => autoStopCurrentRecording('已到達終點定位'))" not in source
