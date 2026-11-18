@@ -192,11 +192,14 @@ def test_no_hardware_simulation_is_explicit_and_skips_camera_startup():
     assert "沒有凱比也沒有Webcam：開啟流程模擬" in control
 
 
-def test_each_action_announces_end_before_advancing():
+def test_each_action_ends_with_a_single_completion_announcement():
     source = INDEX_PATH.read_text(encoding="utf-8")
-    assert "'結束': '/static/tts/end.mp3'" in source
-    assert "setBanner(`${ACTION_LABEL[finishedActionId]}：結束`, 'ok')" in source
-    assert "await speakAsync('結束', { minimumMs: 800 });" in source
+    assert "setBanner(`${ACTION_LABEL[finishedActionId]}：完成`, 'ok')" in source
+    # 完成語句由各動作停止時播報，進入下一項前只等待播完，不再重複說「結束」
+    advance = source[source.index("async function advanceAutomatedTest("):]
+    advance = advance[:advance.index("automationActionIndex++;")]
+    assert "await liveSpeechChain;" in advance
+    assert "speakAsync('結束'" not in advance
 
 
 def test_result_page_includes_safe_rehabilitation_education():
