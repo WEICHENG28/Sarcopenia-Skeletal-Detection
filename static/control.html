@@ -5,34 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>肌少症自動檢測控制台</title>
     <style>
-        :root { color-scheme: light; font-family: "Microsoft JhengHei", system-ui, sans-serif; }
+        /* 與凱比頁共用的沉穩藍灰視覺：細框平面卡片，不使用漸層與表情符號。 */
+        :root {
+            color-scheme: light;
+            --primary: #1f4e79; --primary-strong: #163a5b; --primary-soft: #e9f0f7;
+            --danger: #b42318; --border: #d6dbe1; --text: #1c2430; --muted: #5b6573;
+            font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+        }
         * { box-sizing: border-box; }
-        body { margin: 0; background: #f3f4f6; color: #111827; }
-        main { width: min(760px, calc(100% - 32px)); margin: 48px auto; }
-        .card { background: #fff; border: 1px solid #d1d5db; border-radius: 20px; padding: 32px; box-shadow: 0 12px 28px rgba(0,0,0,.08); }
-        h1 { margin: 0 0 8px; font-size: 32px; }
-        .note { color: #4b5563; line-height: 1.7; }
-        .status { margin: 26px 0; border: 2px solid #111827; border-radius: 16px; padding: 22px; }
-        .status-label { font-size: 14px; font-weight: 700; color: #6b7280; }
-        #stateText { font-size: 30px; font-weight: 800; margin: 8px 0; }
-        #message { font-size: 19px; min-height: 28px; }
-        .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
-        .meta div { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 10px; }
-        .actions { display: grid; grid-template-columns: 2fr 1.35fr 1fr; gap: 14px; }
-        button { border: 0; border-radius: 14px; padding: 18px; font-size: 22px; font-weight: 800; cursor: pointer; }
-        #startBtn { background: #111827; color: #fff; }
-        #testSpeechBtn { background: #1d4ed8; color: #fff; font-size: 18px; }
-        #stopBtn { background: #dc2626; color: #fff; }
+        body { margin: 0; background: #f3f4f6; color: var(--text); }
+        main { width: min(760px, calc(100% - 32px)); margin: 32px auto; }
+        .card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 28px 32px; }
+        h1 { margin: 0 0 6px; font-size: 26px; font-weight: 700; }
+        .note { color: var(--muted); line-height: 1.7; }
+        .status { margin: 22px 0; border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 10px; padding: 18px 20px; background: #fafbfc; }
+        .status-label { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+        #stateText { font-size: 26px; font-weight: 700; margin: 6px 0; color: var(--primary-strong); }
+        #message { font-size: 18px; min-height: 26px; }
+        .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
+        .meta div { background: #fff; border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px; color: var(--muted); }
+        .meta strong { color: var(--text); }
+        .actions { display: grid; grid-template-columns: 2fr 1.35fr 1fr; gap: 12px; }
+        button { border: 1px solid transparent; border-radius: 8px; padding: 16px; font-size: 19px; font-weight: 700; font-family: inherit; cursor: pointer; }
+        #startBtn { background: var(--primary); color: #fff; }
+        #startBtn:hover:not(:disabled) { background: var(--primary-strong); }
+        #testSpeechBtn { background: #fff; border-color: var(--border); color: var(--primary-strong); font-size: 17px; }
+        #stopBtn { background: #fff; border-color: var(--danger); color: var(--danger); }
         button:disabled { opacity: .45; cursor: not-allowed; }
-        .auto-mode { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 14px 18px; border: 1px solid #d1d5db; border-radius: 14px; }
-        .auto-mode-note { margin-top: 4px; color: #4b5563; font-size: 14px; line-height: 1.6; }
-        #autoModeBtn { flex: none; background: #fff; border: 2px solid #1d4ed8; color: #1d4ed8; font-size: 17px; }
-        #autoModeBtn.on { background: #1d4ed8; color: #fff; }
-        .error { color: #b91c1c; font-weight: 700; margin-top: 16px; min-height: 24px; }
-        #speechResult { color: #1e3a8a; font-weight: 700; margin-top: 16px; min-height: 24px; }
-        .rehearsal-link { display: block; margin-top: 16px; padding: 14px; border: 2px solid #1d4ed8; border-radius: 14px; text-align: center; font-size: 18px; font-weight: 800; text-decoration: none; background: #eff6ff; }
-        .rehearsal-link.mock { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
-        a { color: #1d4ed8; }
+        .auto-mode { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 10px; }
+        .auto-mode-note { margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+        #autoModeBtn { flex: none; background: #fff; border-color: var(--primary); color: var(--primary); font-size: 17px; }
+        #autoModeBtn.on { background: var(--primary); color: #fff; }
+        .error { color: var(--danger); font-weight: 600; margin-top: 16px; min-height: 24px; }
+        #speechResult { color: var(--primary-strong); font-weight: 600; margin-top: 16px; min-height: 24px; }
+        .rehearsal-link { display: block; margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; text-align: center; font-size: 16px; font-weight: 600; text-decoration: none; background: #fff; color: var(--primary-strong); }
+        .rehearsal-link:hover { border-color: var(--primary); background: var(--primary-soft); }
+        .rehearsal-link.mock { color: var(--muted); }
+        a { color: var(--primary); }
+        code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
         @media (max-width: 600px) { .actions, .meta { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -155,7 +165,7 @@
         speechTestRunning = true;
         let failureMessage = '';
         document.getElementById('testSpeechBtn').disabled = true;
-        document.getElementById('speechResult').textContent = '🎤 正在收音 4.5 秒，請現在清楚說出姓名…';
+        document.getElementById('speechResult').textContent = '正在收音 4.5 秒，請現在清楚說出姓名…';
         document.getElementById('errorText').textContent = '';
         try {
             const recognized = await api('/speech/listen', {
