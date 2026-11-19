@@ -144,6 +144,23 @@ class TestUncertainty:
 
 @requires_models
 class TestPredictIntegration:
+    def test_risk_is_the_weighted_skeleton_average(self, sample_paths):
+        result = predict(VALID_PROFILE, sample_paths)
+        performed = [r for r in result.per_action.values() if r["performed"]]
+        expected = sum(r["weight"] * r["probability"] for r in performed) / sum(
+            r["weight"] for r in performed
+        )
+        assert result.risk_probability == pytest.approx(expected, abs=1e-4)
+
+    def test_body_measurements_do_not_change_the_risk(self, sample_paths):
+        """最終風險只依骨架；身高、體重、性別與 60 歲以上的年齡都不影響分數。"""
+        baseline = predict(VALID_PROFILE, sample_paths)
+        other = predict(
+            {"age": 66, "height_cm": 180, "weight_kg": 90, "gender": "male"},
+            sample_paths,
+        )
+        assert other.risk_probability == baseline.risk_probability
+
     def test_subject_below_awgs_age_gets_no_risk_score(self, sample_paths):
         result = predict({**VALID_PROFILE, "age": 21}, sample_paths)
         assert result.ok

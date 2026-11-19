@@ -15,6 +15,11 @@
 3. **部位注意力以臨床區塊呈現**，而非 22 個關節點編號。
    醫師無法解讀「節點 25 最重要」，但能理解「下肢近端」。
 
+4. **最終風險只依骨架**。人口學 Stacking 的 AUC 雖較高（0.823），
+   但主要貢獻來自年齡，敏感度僅 0.545；純骨架 late fusion
+   （AUC 0.789、敏感度 0.750）較符合篩檢需求，且結果完全來自動作。
+   年齡只用於判斷 AWGS 2019 適用範圍，身高、體重與性別不影響分數。
+
 用法：
     from src.predict import predict
 
@@ -34,7 +39,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
 
-import joblib
 import numpy as np
 import torch
 
@@ -130,7 +134,6 @@ class _ModelBundle:
         self.models_dir = models_dir
         self._metadata: Dict[str, Any] | None = None
         self._models: Dict[str, STGCN] = {}
-        self._stacking = None
 
     @property
     def metadata(self) -> Dict[str, Any]:
@@ -158,15 +161,6 @@ class _ModelBundle:
             model.eval()
             self._models[action] = model
         return self._models[action]
-
-    @property
-    def stacking(self):
-        if self._stacking is None:
-            path = self.models_dir / "stacking.joblib"
-            if not path.exists():
-                raise FileNotFoundError(f"找不到融合層：{path}")
-            self._stacking = joblib.load(path)
-        return self._stacking
 
 
 _BUNDLE = _ModelBundle()
@@ -265,18 +259,6 @@ def _region_attention(
     if total <= 0:
         return {k: 0.0 for k in scores}
     return {k: round(v / total, 4) for k, v in scores.items()}
-
-
-def _profile_vector(profile: Mapping[str, Any]) -> List[float]:
-    """由基本資料組出融合層所需的特徵。"""
-    age = float(profile["age"])
-    height = float(profile["height_cm"])
-    weight = float(profile["weight_kg"])
-    gender = str(profile.get("gender", "")).strip().lower()
-
-    height_m = max(height / 100.0, 1e-6)
-    bmi = float(profile.get("bmi", weight / (height_m * height_m)))
-    return [age, bmi, height, weight, 1.0 if gender.startswith("f") else 0.0]
 
 
 def _validate_profile(profile: Mapping[str, Any]) -> List[str]:
@@ -430,20 +412,11 @@ def predict(
             message=f"沒有可用的動作資料。{reasons}" if reasons else "未提供任何動作資料。",
         )
 
-    # 動態分母：只加總實際完成的動作權重
+    # 動態分母：只加總實際完成的動作權重。最終風險即為此純骨架加權平均。
     weight_sum = sum(per_action[a].weight for a in used)
-    motion_probability = sum(
+    risk = sum(
         per_action[a].weight * per_action[a].probability for a in used
     ) / weight_sum
-
-    # 融合層需要三個動作的機率；未完成者以純骨架加權平均值代入，
-    # 使缺項不致被解讀為「風險為零」。
-    ordered = sorted(known_actions)
-    stacking_row = [
-        per_action[a].probability if per_action[a].performed else motion_probability
-        for a in ordered
-    ] + _profile_vector(profile)
-    risk = float(bundle.stacking.predict_proba([stacking_row])[0][1])
 
     if len(used) < len(known_actions):
         warnings.append(_missing_actions_message(used, known_actions))
