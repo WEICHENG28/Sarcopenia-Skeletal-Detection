@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 肌少症收案系統 | 專業版</title>
+    <title>身體功能正式收案系統</title>
     <style>
         :root {
             --primary-color: #4f46e5;
@@ -62,6 +62,81 @@
             padding: 20px;
         }
 
+        .rehearsal-banner {
+            max-width: 960px;
+            margin: 95px auto -55px;
+            padding: 14px 20px;
+            border: 2px solid #1d4ed8;
+            border-radius: 16px;
+            background: #eff6ff;
+            color: #1e3a8a;
+            text-align: center;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+        .rehearsal-banner[hidden] { display: none; }
+        .audio-unlock-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 3000;
+            display: grid;
+            place-items: center;
+            padding: 28px;
+            background: rgba(15, 23, 42, 0.78);
+        }
+        .audio-unlock-overlay[hidden] { display: none; }
+        .audio-unlock-card {
+            width: min(720px, 92vw);
+            padding: 34px;
+            border-radius: 24px;
+            background: white;
+            text-align: center;
+            box-shadow: 0 24px 70px rgba(0,0,0,.3);
+        }
+        .audio-unlock-card h2 { margin: 0 0 14px; color: #312e81; font-size: 1.8em; }
+        .audio-unlock-card p { margin: 0 0 22px; line-height: 1.6; }
+        .audio-unlock-card button {
+            min-width: 360px;
+            padding: 18px 28px;
+            border: 0;
+            border-radius: 18px;
+            background: var(--primary-color);
+            color: white;
+            font-size: 1.25em;
+            font-weight: 800;
+        }
+        .simulation-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 24px;
+            background: linear-gradient(135deg, #111827, #312e81);
+            color: white;
+            text-align: center;
+            font-size: 1.15em;
+            font-weight: 800;
+            z-index: 3;
+        }
+        .simulation-placeholder[hidden] { display: none; }
+        .simulation-placeholder small { max-width: 620px; font-size: .65em; font-weight: 500; opacity: .8; }
+        .simulation-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            margin: 18px 0 28px;
+            padding: 16px;
+            border: 2px dashed #7c3aed;
+            border-radius: 16px;
+            background: #f5f3ff;
+        }
+        .simulation-controls[hidden] { display: none; }
+        .simulation-controls button { padding: 12px 20px; border: 0; border-radius: 12px; background: #6d28d9; color: white; font-weight: 800; cursor: pointer; }
+
         .card {
             background: var(--card-bg);
             border-radius: 30px;
@@ -108,18 +183,21 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
             border: 5px solid white;
         }
-        video { width: 100%; height: 100%; object-fit: cover; }
+        #webcam { width: 100%; height: 100%; object-fit: cover; display: block; }
         #poseCanvas {
             position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
         }
 
-        /* 即時動作提示（僅提示，不阻擋錄影，也不評分動作標不標準） */
+        /* 即時動作提示只提供引導與計次，不代表醫療診斷或動作品質評分。 */
         .live-banner {
             position: absolute;
-            top: 14px; left: 50%;
+            top: 14px;
+            left: 50%;
             transform: translateX(-50%);
             max-width: 90%;
             padding: 10px 22px;
@@ -138,15 +216,44 @@
 
         .live-badge {
             position: absolute;
-            bottom: 14px; right: 14px;
+            bottom: 14px;
+            right: 14px;
             padding: 10px 18px;
             border-radius: 20px;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.65);
             color: white;
             font-weight: bold;
             font-size: 0.85em;
             display: none;
             z-index: 2;
+        }
+        .readiness-card {
+            position: absolute;
+            left: 50%;
+            bottom: 18px;
+            z-index: 4;
+            width: min(560px, 90%);
+            padding: 16px 18px;
+            transform: translateX(-50%);
+            border-radius: 16px;
+            background: rgba(15, 23, 42, .92);
+            color: white;
+            text-align: center;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+        .readiness-card[hidden] { display: none; }
+        .readiness-title { font-size: 1.05em; font-weight: 900; }
+        .readiness-status { margin: 6px 0 10px; color: #dbeafe; font-size: .82em; }
+        .readiness-progress { height: 8px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.18); }
+        .readiness-progress span { display: block; width: 0; height: 100%; background: #22c55e; transition: width .2s ease; }
+        .readiness-override {
+            margin-top: 12px;
+            padding: 10px 16px;
+            border: 2px solid white;
+            border-radius: 12px;
+            background: #f59e0b;
+            color: #111827;
+            font-weight: 900;
         }
 
         .btn-grid {
@@ -182,6 +289,41 @@
 
         .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
         .btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+
+        .automation-panel {
+            margin: 0 0 30px;
+            padding: 18px 22px;
+            border: 2px solid #c7d2fe;
+            border-radius: 18px;
+            background: #eef2ff;
+            text-align: center;
+        }
+        .automation-title { font-weight: 800; color: #3730a3; }
+        #automationMessage { margin-top: 8px; line-height: 1.5; }
+        .flow-timeline {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            margin-top: 14px;
+        }
+        .flow-step {
+            padding: 8px 5px;
+            border-radius: 10px;
+            background: rgba(255,255,255,.72);
+            color: #64748b;
+            font-size: .68em;
+            font-weight: 800;
+            text-align: center;
+        }
+        .flow-step.is-done { color: #166534; background: #dcfce7; }
+        .flow-step.is-active { color: #312e81; background: #c7d2fe; box-shadow: 0 0 0 2px #4f46e5 inset; }
+        .flow-step.is-error { color: #991b1b; background: #fee2e2; }
+        #manualNameFallback { display: none; margin-top: 14px; gap: 10px; }
+        #manualNameFallback input { padding: 12px; font-size: 0.85em; }
+        #manualNameFallback button {
+            border: 0; border-radius: 12px; padding: 10px 18px;
+            background: #3730a3; color: white; font-weight: bold;
+        }
 
         /* 上傳進度 */
         .progress-area {
@@ -221,6 +363,36 @@
             border-left: 8px solid var(--primary-color);
             white-space: pre-line;
         }
+        .rehab-education-box {
+            background: #ecfdf5;
+            padding: 24px 30px;
+            border-radius: 20px;
+            text-align: left;
+            margin-top: 20px;
+            line-height: 1.65;
+            border-left: 8px solid var(--success-color);
+        }
+        .rehab-education-box ul { margin: 12px 0; padding-left: 1.4em; }
+        .rehab-education-box li { margin-bottom: 10px; }
+        .rehab-next-step {
+            margin: 12px 0;
+            padding: 12px 14px;
+            border-left: 5px solid #2563eb;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #1e3a8a;
+            font-weight: 700;
+            line-height: 1.6;
+        }
+        .rehab-safety {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 12px;
+            color: #991b1b;
+            background: #fef2f2;
+            font-weight: 700;
+        }
+        .rehab-source { color: #475569; font-size: 0.85em; margin-top: 12px; }
         .features-box {
             background: #eff6ff;
             padding: 20px 30px;
@@ -238,27 +410,21 @@
         .caution-box ul { margin: 8px 0 0 0; padding-left: 20px; }
         .features-box ul { margin: 10px 0 0 0; padding-left: 20px; line-height: 2; }
 
-        /* 治療師標記區 */
-        .label-box {
-            background: #fefce8;
-            border: 2px dashed #f59e0b;
-            border-radius: 20px;
-            padding: 30px;
-            margin-top: 25px;
-            text-align: center;
-        }
-        .label-title { font-size: 1.2em; font-weight: bold; margin-bottom: 20px; color: #92400e; }
-        .label-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
-        .btn-sarco    { background: var(--danger-color); }
-        .btn-no-sarco { background: var(--success-color); }
-        .label-done {
-            font-size: 1.1em; font-weight: bold; padding: 15px;
-            border-radius: 15px; margin-top: 10px;
-            display: none;
-        }
     </style>
 </head>
 <body>
+
+    <div class="audio-unlock-overlay" id="audioUnlockOverlay" hidden>
+        <div class="audio-unlock-card">
+            <h2>🔊 啟用凱比語音提示</h2>
+            <p id="audioUnlockStatus">Firefox 阻擋了自動語音；請點一下作為備援解鎖。</p>
+            <button id="audioUnlockButton" type="button" onclick="enableKebbiAudio(this)">啟用語音</button>
+        </div>
+    </div>
+
+    <div class="rehearsal-banner" id="rehearsalBanner" hidden>
+        🧪 電腦彩排模式：本瀏覽器暫代凱比螢幕，身分仍由電腦端 C922 掃描 QR Code。此模式僅供開發驗證，不代表凱比實機測試完成。
+    </div>
 
     <div class="font-control-bar">
         <span style="font-size: 16px; font-weight: bold;">字體顯示：</span>
@@ -273,12 +439,34 @@
 
             <div id="recordView">
                 <div class="header">
-                    <h1>🦾 肌少症 AI 篩檢系統</h1>
-                    <div class="subtitle">專業醫學影像採集與分析</div>
+                    <h1>🦾 身體功能風險篩檢</h1>
+                    <div class="subtitle">動作檢測與一般性健康衛教｜非醫療診斷</div>
+                </div>
+
+                <div class="automation-panel" id="automationPanel">
+                    <div class="automation-title">自動檢測：<span id="automationStateText">待機</span></div>
+                    <div id="automationMessage">請由電腦控制台啟動一輪檢測</div>
+                    <div class="flow-timeline" id="flowTimeline" aria-label="篩檢流程進度">
+                        <span class="flow-step" data-flow-step="0">QR</span>
+                        <span class="flow-step" data-flow-step="1">入鏡</span>
+                        <span class="flow-step" data-flow-step="2">坐站</span>
+                        <span class="flow-step" data-flow-step="3">行走</span>
+                        <span class="flow-step" data-flow-step="4">半蹲</span>
+                        <span class="flow-step" data-flow-step="5">結果</span>
+                    </div>
+                    <div id="manualNameFallback">
+                        <input id="manualNameInput" type="text" placeholder="QR 無法辨識時，可輸入名冊姓名">
+                        <button onclick="submitManualName()">以姓名備援確認</button>
+                    </div>
+                </div>
+
+                <div class="simulation-controls" id="simulationControls" hidden>
+                    <button id="runSimulationBtn" onclick="runNoHardwareSimulation()">▶ 播放完整流程模擬</button>
+                    <span>不使用相機、麥克風、錄影或模型推論</span>
                 </div>
 
                 <div class="input-section">
-                    <div class="input-box"><label>受測者編號</label><input type="text" id="subjectId" placeholder="P001"></div>
+                    <div class="input-box"><label>受測者編號</label><input type="text" id="subjectId" placeholder="SB01"></div>
                     <div class="input-box"><label>年齡</label><input type="number" id="age" placeholder="75"></div>
                     <div class="input-box"><label>身高 (cm)</label><input type="number" id="height" placeholder="165"></div>
                     <div class="input-box"><label>體重 (kg)</label><input type="number" id="weight" placeholder="60"></div>
@@ -293,10 +481,21 @@
                 </div>
 
                 <div class="video-container">
-                    <video id="webcam" autoplay playsinline muted></video>
+                    <img id="webcam" alt="C922 即時畫面">
                     <canvas id="poseCanvas"></canvas>
+                    <div class="simulation-placeholder" id="simulationPlaceholder" hidden>
+                        <div id="simulationStage">無硬體流程模擬</div>
+                        <small>這裡只驗證介面、語音提示與狀態順序，不代表入鏡、骨架、錄影、計次或模型已通過。</small>
+                    </div>
                     <div class="live-banner" id="liveBanner"></div>
                     <div class="live-badge" id="liveRepBadge"></div>
+                    <div class="readiness-card" id="readinessCard" hidden>
+                        <div class="readiness-title" id="readinessTitle">等待動作就緒</div>
+                        <div class="readiness-status" id="readinessStatus" aria-live="polite">正在檢查姿勢…</div>
+                        <div class="readiness-progress" aria-hidden="true"><span id="readinessProgress"></span></div>
+                        <button class="readiness-override" id="readinessOverride" type="button"
+                                onclick="confirmActionReadiness()" hidden>工作人員確認已就緒</button>
+                    </div>
                 </div>
 
                 <div class="btn-grid">
@@ -327,7 +526,7 @@
 
             <div id="resultView" class="result-view">
                 <div class="header">
-                    <h1>📋 診斷分析報告</h1>
+                    <h1>📋 身體功能篩檢結果</h1>
                     <div id="resInfo" class="subtitle">受測者：-</div>
                 </div>
                 <div class="result-score" id="resProb">0%</div>
@@ -339,106 +538,323 @@
                     <ul id="cautionList"></ul>
                 </div>
                 <div class="advice-box">
-                    <strong style="font-size: 1.2em;">💡 AI 專業健康建議：</strong><hr>
+                    <strong style="font-size: 1.2em;">💡 篩檢結果說明：</strong><hr>
                     <span id="resAdvice">-</span>
+                </div>
+                <div class="rehab-education-box" id="rehabEducationBox">
+                    <strong style="font-size: 1.2em;">🏃 檢測後一般活動與防跌衛教</strong>
+                    <p id="rehabIntro"></p>
+                    <div class="rehab-next-step" id="rehabNextStep"></div>
+                    <ul id="rehabEducationList"></ul>
+                    <div class="rehab-safety">
+                        <strong>立即停止：</strong>胸痛／胸悶、無法舒適說話的呼吸困難、暈眩／快昏倒、新發不規則心跳，或新發且明顯的疼痛。症狀嚴重或休息後未改善，請立即尋求醫療協助；緊急時撥 119。
+                    </div>
+                    <div class="rehab-source">一般原則參考：WHO 高齡者身體活動建議、衛生福利部國民健康署《全民身體活動指引》。本頁不提供個別診斷、運動處方或藥物／營養劉量調整。</div>
                 </div>
                 <div class="features-box" id="featuresBox" style="display:none;">
                     <strong>📊 主要影響因子：</strong>
                     <ul id="featuresList"></ul>
                 </div>
-                <!-- 治療師診斷標記 -->
-                <div class="label-box" id="labelBox">
-                    <div class="label-title">🩺 治療師診斷標記</div>
-                    <div style="opacity: 0.7; margin-bottom: 15px; font-size: 0.95em;">請根據臨床判斷標記此受測者的實際診斷結果</div>
-                    <div class="label-btn-grid">
-                        <button class="btn btn-sarco" onclick="saveDiagnosis(1)">有肌少症</button>
-                        <button class="btn btn-no-sarco" onclick="saveDiagnosis(0)">無肌少症</button>
-                    </div>
-                    <div class="label-done" id="labelDone"></div>
-                </div>
-
                 <button class="btn btn-primary" style="margin-top: 40px; width: 100%; border-radius: 50px;" onclick="location.reload()">完成，錄製下一位</button>
             </div>
 
         </div>
     </div>
 
+    <script src="/static/sit_to_stand_counter.js"></script>
+    <script src="/static/action_readiness.js"></script>
     <script>
         // ── 設定後端位址 ──────────────────────────────────────────
         const API_BASE = window.location.origin;
+        const AUTOMATION_TAB_STORAGE_KEY = 'sarcopenia-active-automation-tab';
+        const AUTOMATION_PAGE_INSTANCE_ID = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        let isActiveAutomationTab = false;
+        const PAGE_PARAMS = new URLSearchParams(window.location.search);
+        const KEBBI_MODE = PAGE_PARAMS.get('kebbi') === '1';
+        const NO_HARDWARE_SIMULATION_MODE = PAGE_PARAMS.get('mock') === '1';
+        const PC_REHEARSAL_MODE = PAGE_PARAMS.get('rehearsal') === '1' || NO_HARDWARE_SIMULATION_MODE;
+        if (PC_REHEARSAL_MODE) {
+            document.getElementById('rehearsalBanner').hidden = false;
+            document.title = '電腦彩排｜身體功能篩檢流程';
+        }
+        if (NO_HARDWARE_SIMULATION_MODE) {
+            document.getElementById('rehearsalBanner').textContent =
+                '🧪 無硬體流程模擬：不使用凱比、Webcam或麥克風，只驗證介面、提示與狀態順序；不得作為實機或模型成果。';
+        }
+        let kebbiAudioReady = !KEBBI_MODE;
 
         // ── 狀態變數 ──────────────────────────────────────────────
-        let stream = null;
-        let mediaRecorder = null;
+        let isRecording = false;
+        let activeActionId = null;
         let videoData = { sit: null, walk: null, squat: null };
         let timerInterval = null;
         let startTime = 0;
-        let currentUserId = null;
+        let automationServerState = { state: 'idle', revision: -1, participant: null };
+        let automationPresenceSince = null;
+        let identityFlowRunning = false;
+        let identityFlowToken = 0;
+        let automationSequenceActive = false;
+        let automationActionIndex = -1;
+        let automationRunToken = 0;
+        // 單項動作未完成時，先在同一輪自動重做，避免整輪中斷後語音引導停止。
+        const MAX_AUTOMATED_ACTION_RETRIES = 2;
+        const ACTION_RETRY_PROMPT = '這次沒有完成，我們再試一次。';
+        let automationRetryCounts = {};
+        let pendingActionReadiness = null;
+        // 起立坐下在就緒檢查與倒數期間先完成坐姿校正，聽到「開始」即可直接站起。
+        let preparedSitCounter = null;
+        let activePromptAudio = null;
+        let screenWakeLock = null;
+
+        function claimAutomationTab() {
+            try {
+                localStorage.setItem(AUTOMATION_TAB_STORAGE_KEY, AUTOMATION_PAGE_INSTANCE_ID);
+                isActiveAutomationTab =
+                    localStorage.getItem(AUTOMATION_TAB_STORAGE_KEY) === AUTOMATION_PAGE_INSTANCE_ID;
+            } catch (_) {
+                // Private browsing may disable localStorage. The visible page remains the fallback controller.
+                isActiveAutomationTab = document.visibilityState === 'visible';
+            }
+            return isActiveAutomationTab;
+        }
+
+        function relinquishAutomationTab() {
+            try {
+                if (localStorage.getItem(AUTOMATION_TAB_STORAGE_KEY) === AUTOMATION_PAGE_INSTANCE_ID) {
+                    localStorage.removeItem(AUTOMATION_TAB_STORAGE_KEY);
+                }
+            } catch (_) {}
+            isActiveAutomationTab = false;
+        }
+
+        window.addEventListener('storage', event => {
+            if (event.key !== AUTOMATION_TAB_STORAGE_KEY) return;
+            if (event.newValue && event.newValue !== AUTOMATION_PAGE_INSTANCE_ID) {
+                isActiveAutomationTab = false;
+                cancelLocalAutomation();
+                document.getElementById('automationMessage').textContent =
+                    '此分頁已停止控制；請使用目前顯示中的正式檢測頁。';
+            }
+        });
+
+        window.addEventListener('beforeunload', relinquishAutomationTab);
 
         // ── 動作對應後端 action 名稱 ──────────────────────────────
         const ACTION_MAP = { sit: "Sit", walk: "Walk", squat: "Squat" };
         const BTN_ID_MAP = { sit: "btnSit", walk: "btnWalk", squat: "btnSquat" };
         const ACTION_LABEL = { sit: "起立坐下", walk: "走三公尺", squat: "半蹲" };
 
-        // ── 啟動鏡頭（30 FPS）────────────────────────────────────
-        window.onload = async function() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30, max: 30 }
-                    }
-                });
-                document.getElementById('webcam').srcObject = stream;
-                initPoseTracking(); // 背景載入即時姿勢偵測，失敗也不影響錄影與上傳
-            } catch (err) {
-                alert("相機讀取失敗，請確認攝影機已連接。");
+        // ── 顯示電腦端 C922 畫面 ──────────────────────────────────
+        function loadNextWebcamFrame() {
+            if (!isActiveAutomationTab || NO_HARDWARE_SIMULATION_MODE) return;
+            document.getElementById('webcam').src =
+                `${API_BASE}/camera/frame.jpg?t=${Date.now()}`;
+        }
+
+        // 凱比瀏覽器無法直接讀取接在 Windows 電腦上的 USB 攝影機，
+        // 因此由同一台 FastAPI 伺服器提供逐格 JPEG 預覽。
+        window.onload = function() {
+            if (document.visibilityState === 'visible') claimAutomationTab();
+            const webcam = document.getElementById('webcam');
+            if (NO_HARDWARE_SIMULATION_MODE) {
+                webcam.style.display = 'none';
+                document.getElementById('poseCanvas').style.display = 'none';
+                document.getElementById('simulationPlaceholder').hidden = false;
+                document.getElementById('simulationControls').hidden = false;
+                updateAutomationPanel({ state: 'idle', message: '可播放無硬體流程模擬' });
+                ensureScreenWakeLock();
+                return;
             }
+            if (!isActiveAutomationTab) {
+                document.getElementById('automationMessage').textContent =
+                    '此背景分頁不會控制檢測；請使用目前顯示中的正式檢測頁。';
+                return;
+            }
+            if (KEBBI_MODE) void attemptKebbiAudioAutostart();
+            webcam.onload = () => {
+                if (isActiveAutomationTab) setTimeout(loadNextWebcamFrame, 35);
+            };
+            webcam.onerror = () => {
+                if (isActiveAutomationTab) setTimeout(loadNextWebcamFrame, 500);
+            };
+            loadNextWebcamFrame();
+            initPoseTracking();
+            ensureScreenWakeLock();
+            pollAutomationState();
+            setInterval(pollAutomationState, 1000);
         };
+
+        function simulationPause(milliseconds) {
+            return new Promise(resolve => setTimeout(resolve, milliseconds));
+        }
+
+        async function runNoHardwareSimulation() {
+            if (!NO_HARDWARE_SIMULATION_MODE) return;
+            const button = document.getElementById('runSimulationBtn');
+            const stage = document.getElementById('simulationStage');
+            button.disabled = true;
+            prepareAutomationCycle();
+            document.getElementById('simulationPlaceholder').hidden = false;
+            try {
+                updateAutomationPanel({ state: 'scanning_qr', message: '[模擬] QR 掃描已開啟' });
+                stage.textContent = '1 / 7　QR 身分確認：SB01（無語音提示）';
+                await simulationPause(700);
+
+                const profile = { participant_id: 'SB01', name: '王小明', age: 45, height_cm: 167, weight_kg: 65, gender: 'male' };
+                loadParticipantIntoForm(profile);
+                updateAutomationPanel({ state: 'profile_loaded', message: '[模擬] 身分已確認，等待完整入鏡' });
+                stage.textContent = '2 / 7　基本資料載入完成';
+                await speakAsync('您好，基本資料已載入。接下來將依序進行三項動作測試。');
+                stage.textContent = '3 / 7　請退後並讓全身完整入鏡';
+                await speakAsync('請完整入鏡');
+                await simulationPause(1000);
+
+                updateAutomationPanel({ state: 'testing', message: '[模擬] 三項動作流程進行中' });
+                for (let index = 0; index < AUTOMATED_ACTIONS.length; index++) {
+                    const action = AUTOMATED_ACTIONS[index];
+                    const actionName = ACTION_MAP[action.id];
+                    stage.textContent = `${index + 4} / 7　${ACTION_LABEL[action.id]}：流程模擬`;
+                    setStatus(actionName, 'recording', '模擬進行中');
+                    await speakAsync(action.prompt);
+                    await simulationPause(800);
+                    setStatus(actionName, 'done', '模擬完成（無錄影）');
+                    await speakAsync('結束', { minimumMs: 800 });
+                }
+
+                updateAutomationPanel({ state: 'completed', message: '[模擬] 流程順序完成；未執行錄影、計次或模型推論' });
+                stage.textContent = '7 / 7　流程模擬完成';
+                await speakAsync('流程模擬已完成。本次未執行錄影、計次或分析。');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function ensureScreenWakeLock() {
+            if (!('wakeLock' in navigator) || document.visibilityState !== 'visible'
+                || screenWakeLock) return;
+            try {
+                screenWakeLock = await navigator.wakeLock.request('screen');
+                screenWakeLock.addEventListener('release', () => {
+                    screenWakeLock = null;
+                });
+            } catch (error) {
+                console.warn('無法取得螢幕喚醒鎖：', error);
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // 切到背景時逐格預覽會停止；回到前景要重新啟動，否則畫面與骨架偵測都會凍結。
+                if (claimAutomationTab()) loadNextWebcamFrame();
+                ensureScreenWakeLock();
+                pollAutomationState();
+            } else {
+                isActiveAutomationTab = false;
+            }
+        });
 
         // ── 字體控制 ──────────────────────────────────────────────
         function updateFontSize(size, btnElement) {
             document.documentElement.style.setProperty('--base-font-size', size);
-            document.querySelectorAll('.font-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.font-btn:not(#speechToggleBtn)').forEach(b => b.classList.remove('active'));
             btnElement.classList.add('active');
         }
 
         // ── 錄影切換 ──────────────────────────────────────────────
-        function toggleRecording(actionId, btnId, actionName) {
+        async function toggleRecording(actionId, btnId, actionName) {
             const btn = document.getElementById(btnId);
 
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                cancelPendingAutoStop();
-                mediaRecorder.stop();
+            if (isRecording) {
+                if (activeActionId !== actionId) return;
+                let recordingSaved = false;
+                const stoppedRepCount = live.repCount;
+                const stoppedActionCompleted = live.actionCompleted;
+                btn.disabled = true;
                 clearInterval(timerInterval);
-                let totalSec = Math.floor((Date.now() - startTime) / 1000);
-                const repSuffix = (currentRecordingActionId === actionId && live.repCount > 0)
-                    ? ` · ${live.repCount}下` : '';
-                btn.innerText = `✅ ${actionName} (${totalSec}s${repSuffix})`;
-                btn.style.backgroundColor = "#10b981";
-                setBtnState(btnId, false);
-                currentRecordingActionId = null;
-                setBadge('');
-                setBanner('', null);
+                btn.innerText = "⏳ 正在儲存影片...";
+                try {
+                    const stopRes = await fetch(`${API_BASE}/camera/recordings/stop`, { method: 'POST' });
+                    if (!stopRes.ok) throw new Error(`停止錄影失敗 (HTTP ${stopRes.status})`);
+                    const info = await stopRes.json();
+                    const videoRes = await fetch(`${API_BASE}${info.download_url}`);
+                    if (!videoRes.ok) throw new Error(`讀取錄影檔失敗 (HTTP ${videoRes.status})`);
+                    videoData[actionId] = await videoRes.blob();
+                    const totalSec = Math.floor((Date.now() - startTime) / 1000);
+                    const repSuffix = (currentRecordingActionId === actionId && live.repCount > 0)
+                        ? ` · ${live.repCount}下` : '';
+                    btn.innerText = `✅ ${actionName} (${totalSec}s${repSuffix})`;
+                    btn.style.backgroundColor = "#10b981";
+                    recordingSaved = true;
+                } catch (err) {
+                    btn.innerText = `錄製：${actionName}`;
+                    btn.style.backgroundColor = "";
+                    alert(`影片儲存失敗：${err.message}`);
+                } finally {
+                    if (live.timedStopHandle !== null) clearTimeout(live.timedStopHandle);
+                    isRecording = false;
+                    activeActionId = null;
+                    currentRecordingActionId = null;
+                    setBadge('');
+                    btn.disabled = false;
+                    setBtnState(btnId, false);
+                }
+                if (recordingSaved && actionId === 'sit'
+                    && stoppedRepCount < REP_TARGET.sit) {
+                    videoData[actionId] = null;
+                    btn.innerText = `⚠️ 未完成（${stoppedRepCount} / ${REP_TARGET.sit} 下），請重錄`;
+                    btn.style.backgroundColor = "#f59e0b";
+                    setBanner(`起立坐下只辨識到 ${stoppedRepCount} 下，不會送入 AI 分析`, 'warn');
+                    setStatus('Sit', 'error', `未完成 ${stoppedRepCount}/${REP_TARGET.sit}`);
+                    if (automationSequenceActive) {
+                        if (retryCurrentAutomatedAction(actionId)) return;
+                        automationSequenceActive = false;
+                        await reportAutomationFailure(
+                            `起立坐下未完成：只辨識到 ${stoppedRepCount}/${REP_TARGET.sit} 下，請調整站位後重新開始`,
+                            false
+                        );
+                    }
+                    return;
+                }
+                if (recordingSaved && actionId === 'walk' && !stoppedActionCompleted) {
+                    videoData[actionId] = null;
+                    btn.innerText = '⚠️ 未到達終點，請重錄';
+                    btn.style.backgroundColor = "#f59e0b";
+                    setBanner('行走測試未辨識到穩定終點，不會送入 AI 分析', 'warn');
+                    setStatus('Walk', 'error', '未到達終點');
+                    if (automationSequenceActive) {
+                        if (retryCurrentAutomatedAction(actionId)) return;
+                        automationSequenceActive = false;
+                        await reportAutomationFailure(
+                            '行走測試未在時間內到達穩定終點，請調整站位後重新開始',
+                            false
+                        );
+                    }
+                    return;
+                }
+                if (recordingSaved && automationSequenceActive) {
+                    void advanceAutomatedTest(actionId).catch(error => {
+                        automationSequenceActive = false;
+                        void reportAutomationFailure(`自動測試無法繼續：${error.message}`);
+                    });
+                }
                 return;
             }
 
             if (videoData[actionId] && !confirm(`確定要重錄【${actionName}】嗎？影片將被覆蓋。`)) return;
 
-            cancelPendingAutoStop();
+            if (live.timedStopHandle !== null) clearTimeout(live.timedStopHandle);
             setBtnState(btnId, true);
-            const chunks = []; // 每段錄影獨立保存，避免上一段 onstop 寫入新一段的資料
+            try {
+                const startRes = await fetch(`${API_BASE}/camera/recordings/start`, { method: 'POST' });
+                if (!startRes.ok) throw new Error(`啟動錄影失敗 (HTTP ${startRes.status})`);
+            } catch (err) {
+                setBtnState(btnId, false);
+                alert(`無法開始錄影：${err.message}\n請確認 C922 已連接電腦。`);
+                return;
+            }
 
-            // 優先使用 mp4，不支援則退回 webm
-            const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
-            mediaRecorder = new MediaRecorder(stream, { mimeType });
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-            mediaRecorder.onstop = () => {
-                videoData[actionId] = new Blob(chunks, { type: mimeType });
-            };
-
-            mediaRecorder.start();
+            isRecording = true;
+            activeActionId = actionId;
             btn.style.backgroundColor = "#f43f5e";
             startTime = Date.now();
             timerInterval = setInterval(() => {
@@ -446,38 +862,51 @@
                 btn.innerText = `⏹️ 錄製中... ${sec}秒`;
             }, 1000);
 
-            // 重置即時動作監測狀態
             currentRecordingActionId = actionId;
             live = resetLiveState();
             live.recordStart = performance.now() / 1000;
             setBanner('', null);
-            setBadge(REP_TARGET[actionId] ? `0 / ${REP_TARGET[actionId]} 下`
-                : actionId === 'squat' ? '半蹲維持 3 秒後，請手動停止' : '走完三公尺後，請手動停止');
+            if (actionId === 'sit') {
+                const prepared = takePreparedSitCounter();
+                if (prepared) live.sitCounter = prepared;
+                setBadge(prepared
+                    ? `0 / ${REP_TARGET.sit} 下 · 已辨識坐姿，請開始`
+                    : `0 / ${REP_TARGET.sit} 下 · 請先坐穩，正在校正坐姿`);
+                live.timedStopHandle = setTimeout(() => {
+                    if (currentRecordingActionId !== 'sit' || !isRecording
+                        || live.autoStopTriggered) return;
+                    live.autoStopTriggered = true;
+                    setBanner(`⚠️ 60 秒內只辨識到 ${live.repCount}/${REP_TARGET.sit} 下`, 'warn');
+                    void autoStopCurrentRecording('未在時間內完成五次起立坐下', 'warn');
+                }, SIT_MAX_RECORD_MS);
+            } else if (actionId === 'walk') {
+                setBadge('走向終點中');
+                live.timedStopHandle = setTimeout(() => {
+                    if (currentRecordingActionId !== 'walk' || !isRecording
+                        || live.autoStopTriggered) return;
+                    live.autoStopTriggered = true;
+                    setBanner('⚠️ 30 秒內未辨識到穩定終點', 'warn');
+                    void autoStopCurrentRecording('未在時間內到達終點', 'warn');
+                }, WALK_MAX_RECORD_MS);
+            } else if (actionId === 'squat') {
+                setBadge('半蹲 1 次 · 錄影 4 秒');
+                live.timedStopHandle = setTimeout(() => {
+                    if (currentRecordingActionId !== 'squat' || !isRecording
+                        || live.autoStopTriggered) return;
+                    live.autoStopTriggered = true;
+                    setBanner('✅ 半蹲動作已記錄，即將結束', 'ok');
+                    void queueSpeech('半蹲動作已記錄，錄影即將結束', { minimumMs: 500 })
+                        .then(() => autoStopCurrentRecording('半蹲錄影 4 秒完成'));
+                }, SQUAT_RECORD_MS);
+            }
         }
 
-        function cancelPendingAutoStop() {
-            if (autoStopTimer !== null) clearTimeout(autoStopTimer);
-            autoStopTimer = null;
-        }
-
-        function scheduleAutoStop(reason) {
-            cancelPendingAutoStop();
-            const recorder = mediaRecorder;
-            autoStopTimer = setTimeout(() => {
-                // 即使舊 callback 已進入事件佇列，也不能停止下一段（含同動作重錄）。
-                if (mediaRecorder !== recorder || recorder.state !== 'recording') return;
-                autoStopTimer = null;
-                autoStopCurrentRecording(reason);
-            }, 1500);
-        }
-
-        // 自動停止時走跟手動點擊相同的「停止」邏輯，避免兩套狀態不同步
-        function autoStopCurrentRecording(reason) {
-            if (!currentRecordingActionId) return;
-            if (!(mediaRecorder && mediaRecorder.state === "recording")) return;
+        // 自動停止與手動停止共用同一條電腦端錄影收尾流程。
+        async function autoStopCurrentRecording(reason, bannerKind = 'ok') {
+            if (!currentRecordingActionId || !isRecording) return;
             const actionId = currentRecordingActionId;
-            toggleRecording(actionId, BTN_ID_MAP[actionId], ACTION_LABEL[actionId]);
-            setBanner(`⏹️ 已自動停止錄影（${reason}）`, 'ok');
+            await toggleRecording(actionId, BTN_ID_MAP[actionId], ACTION_LABEL[actionId]);
+            setBanner(`⏹️ 已自動停止錄影（${reason}）`, bannerKind);
         }
 
         function setBtnState(activeId, disabled) {
@@ -489,8 +918,13 @@
         // ── 更新進度狀態 ──────────────────────────────────────────
         function setStatus(action, state, text) {
             const el = document.getElementById(`status${action}`);
+            if (!el) {
+                console.warn(`找不到動作狀態欄位：${action}`);
+                return false;
+            }
             el.className = `step-status status-${state}`;
             el.innerText = text;
+            return true;
         }
 
         // ── 上傳單支影片 ──────────────────────────────────────────
@@ -517,14 +951,18 @@
                 headers: { 'ngrok-skip-browser-warning': '1' },
                 body: form
             });
-            if (!res.ok) throw new Error(`${actionName} 上傳失敗 (HTTP ${res.status})`);
+            if (!res.ok) {
+                let detail = `HTTP ${res.status}`;
+                try { detail = (await res.json()).detail || detail; } catch (_) {}
+                throw new Error(`${actionName} 上傳失敗：${detail}`);
+            }
 
             setStatus(statusKey, 'done', '完成 ✓');
             return await res.json();
         }
 
         // ── 主上傳流程 ────────────────────────────────────────────
-        async function startUpload() {
+        async function startUpload({ automated = false } = {}) {
             const sid    = document.getElementById('subjectId').value.trim();
             const age    = document.getElementById('age').value.trim();
             const height = document.getElementById('height').value.trim();
@@ -554,38 +992,65 @@
             });
 
             let lastResult = null;
+            let currentUploadActionId = null;
             try {
                 for (const actionId of ['sit', 'walk', 'squat']) {
                     if (!videoData[actionId]) continue;
+                    currentUploadActionId = actionId;
                     lastResult = await uploadVideo(actionId, formBase);
                 }
             } catch (err) {
-                const actionName = err.message.split(' ')[0];
+                const actionName = ACTION_MAP[currentUploadActionId] || 'Sit';
                 setStatus(actionName, 'error', '失敗 ✗');
                 document.getElementById('btnSubmit').disabled = false;
                 document.getElementById('btnSubmit').innerText = "🚀 傳送影片進行 AI 分析";
-                alert(`上傳失敗：${err.message}\n請確認後端伺服器是否已啟動（${API_BASE}）`);
+                const failureMessage = `上傳或分析失敗：${err.message}`;
+                setBanner(`⚠️ ${failureMessage}`, 'warn');
+                showResult(sid, {
+                    inference_result: {
+                        status: 'error',
+                        message: `${failureMessage}。本頁仍提供一般性安全衛教，請勿將其視為個別運動處方。`,
+                        risk_probability: null
+                    }
+                });
+                if (automated) void reportAutomationFailure(failureMessage, false);
                 return;
             }
 
+            if (lastResult?.inference_result?.status !== 'success') {
+                const fallbackMessage = lastResult?.inference_result?.message
+                    || '本次沒有有效的 AI 風險結果';
+                if (automated) {
+                    void reportAutomationFailure(`分析無法完成：${fallbackMessage}`, false);
+                }
+            }
             showResult(sid, lastResult);
         }
 
         // ── 顯示結果 ──────────────────────────────────────────────
         function showResult(sid, data) {
+            automationResultShownAt = performance.now() / 1000;
             // 風險機率在 inference_result 內層
             const infer = data.inference_result ?? {};
-            const prob  = infer.risk_probability ?? 0;
-            const pct   = Math.round(prob * 100);
+            const rawProbability = infer.risk_probability;
+            const inferenceAvailable = infer.status === 'success'
+                && typeof rawProbability === 'number'
+                && Number.isFinite(rawProbability);
+            const prob = inferenceAvailable ? rawProbability : null;
+            const pct = inferenceAvailable ? Math.round(prob * 100) : null;
 
             // 風險等級由伺服器提供，門檻與模型交叉驗證的結果一致。
             // 舊版前端自行以 0.6 / 0.3 判斷，與模型實際門檻（0.70 / 0.513 / 0.35）不符。
             const serverLevel = infer.risk_level ?? '';
             let level, levelColor, advice;
-            if (serverLevel === '無法評估') {
+            if (infer.age_not_applicable) {
+                level = "不適用（未滿 60 歲）";
+                levelColor = "var(--warning-color)";
+                advice = "【分析結果】AWGS 2019 肌少症篩檢準則適用於 60 歲以上長者，本次不提供風險判斷。\n本次錄影與動作分析仍已完成，可作為動作示範與體驗；下方提供一般性健康衛教。";
+            } else if (!inferenceAvailable || serverLevel === '無法評估') {
                 level = "無法評估";
                 levelColor = "var(--warning-color)";
-                advice = "【分析結果】資料不足以產出評估。請確認影片已成功上傳，且人物完整入鏡。";
+                advice = `【分析結果】本次未產出有效風險評估。${infer.message || '請確認影片已成功上傳，且人物完整入鏡。'}`;
             } else if (infer.uncertain) {
                 // 不確定時不給明確分級，避免使用者把灰色地帶的結果當成結論
                 level = `結果不確定（模型傾向：${serverLevel || '-'}）`;
@@ -594,19 +1059,19 @@
             } else if (serverLevel === '高' || (!serverLevel && prob >= 0.70)) {
                 level = "高風險 (High Risk)";
                 levelColor = "var(--danger-color)";
-                advice = "【分析結果】動作表現顯示較明顯的肌少症徵象，建議：\n1. 至家醫科或復健科接受完整評估（握力、步速、肌肉量）。\n2. 在專業指導下進行漸進式阻力訓練。\n3. 增加優質蛋白質攝取，每公斤體重約 1.2g/天。\n4. 補充維生素 D，並增加戶外活動。";
+                advice = "【分析結果】模型風險指數偏高。建議至家醫科或復健科接受完整評估（例如握力、步速與肌肉量）；若曾跌倒、走路不穩或有慢性病，開始居家運動前請先與醫師或物理治療師討論。";
             } else if (serverLevel === '中高' || (!serverLevel && prob >= 0.513)) {
                 level = "中高風險 (Moderate-High Risk)";
                 levelColor = "var(--danger-color)";
-                advice = "【分析結果】多項動作表現低於同齡標準，建議：\n1. 安排復健科或家醫科評估。\n2. 每週 3 次以上阻力訓練，搭配有氧運動。\n3. 注意每餐蛋白質攝取。\n4. 三個月後回診追蹤。";
+                advice = "【分析結果】模型風險指數落在中高區間。建議安排復健科或家醫科評估，並由專業人員依行動能力、跌倒風險與既有疾病規劃運動。";
             } else if (serverLevel === '中低' || (!serverLevel && prob >= 0.35)) {
                 level = "中低風險 (Moderate-Low Risk)";
                 levelColor = "var(--warning-color)";
-                advice = "【分析結果】部分動作表現略低於標準，建議：\n1. 每週進行 3 次以上有氧運動（快走、騎車）。\n2. 注意蛋白質攝取，每餐均衡攝入。\n3. 每半年回診追蹤，持續觀察肌肉功能變化。";
+                advice = "【分析結果】模型風險指數落在中低區間。可從能力可負荷的肌力、平衡與步行活動開始，循序增加；若日常起身、走路或上下樓梯已感困難，建議接受專業評估。";
             } else {
                 level = "低風險 (Low Risk)";
                 levelColor = "var(--success-color)";
-                advice = "【分析結果】動作功能表現良好，維持現有生活習慣：\n1. 持續規律運動，每週至少 150 分鐘中等強度活動。\n2. 均衡飲食，維持適當體重。\n3. 每年定期健康檢查。";
+                advice = "【分析結果】模型風險指數偏低。仍建議維持規律活動、肌力與平衡訓練，並持續留意日常功能變化。";
             }
 
             // 篩檢工具的必要聲明：模型以 31 位個案訓練，屬可行性研究等級
@@ -614,17 +1079,14 @@
 
             document.getElementById('resInfo').innerText = `受測者編號：${sid}`;
             const probEl = document.getElementById('resProb');
-            probEl.innerText = `${pct}%`;
-            if (infer.uncertain) {
-                const note = document.createElement('span');
-                note.style.fontSize = '0.35em';
-                note.innerText = '（僅供參考）';
-                probEl.appendChild(note);
-            }
+            probEl.innerText = inferenceAvailable ? `${pct}%` : '--';
+            // 結果不確定或年齡不適用時不顯示大字百分比，避免被當成可靠的分數。
+            probEl.style.display = infer.uncertain || infer.age_not_applicable ? 'none' : '';
             document.getElementById('resProb').style.color = levelColor;
             document.getElementById('resLevel').innerText = level;
             document.getElementById('resLevel').style.color = levelColor;
             document.getElementById('resAdvice').innerText = advice;
+            renderRehabEducation(serverLevel || level, inferenceAvailable);
 
             // 不確定原因與警告獨立顯示，不與影響因子混在一起
             const reasons  = infer.uncertainty_reasons ?? [];
@@ -647,6 +1109,7 @@
             }
 
             // 顯示影響因子（若有）
+            document.getElementById('featuresBox').style.display = 'none';
             if (infer.top_features && infer.top_features.length > 0) {
                 const list = document.getElementById('featuresList');
                 list.innerHTML = '';
@@ -658,58 +1121,56 @@
                 document.getElementById('featuresBox').style.display = 'block';
             }
 
-            currentUserId = sid;
             document.getElementById('recordView').style.display = 'none';
             document.getElementById('resultView').style.display  = 'block';
-            if (stream) stream.getTracks().forEach(t => t.stop());
-            cancelPendingAutoStop();
-            if (poseLoopHandle) cancelAnimationFrame(poseLoopHandle);
+            if (poseLoopHandle) {
+                cancelAnimationFrame(poseLoopHandle);
+                poseLoopHandle = null;
+            }
             if (poseLandmarker) { poseLandmarker.close(); poseLandmarker = null; }
             window.scrollTo(0, 0);
+            speak(inferenceAvailable
+                ? '檢測完成。畫面已顯示一般性復健運動衛教，請依自身能力循序進行。'
+                : '本次資料無法完成風險評估。畫面仍提供一般性安全衛教，請由工作人員確認，不能視為個別運動處方。');
         }
 
-        // ── 治療師診斷標記 ────────────────────────────────────────
-        async function saveDiagnosis(label) {
-            const labelText = label === 1 ? '有肌少症' : '無肌少症';
-            if (!confirm(`確定標記【${currentUserId}】為「${labelText}」嗎？`)) return;
-
-            // 停用按鈕防止重複送出
-            document.querySelectorAll('.btn-sarco, .btn-no-sarco').forEach(b => b.disabled = true);
-
-            try {
-                const form = new FormData();
-                form.append('user_id', currentUserId);
-                form.append('label', label);
-
-                const res = await fetch(`${API_BASE}/label/`, {
-                    method: 'POST',
-                    headers: { 'ngrok-skip-browser-warning': '1' },
-                    body: form
-                });
-
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-                const doneEl = document.getElementById('labelDone');
-                doneEl.style.display = 'block';
-                doneEl.style.background = label === 1 ? '#fee2e2' : '#d1fae5';
-                doneEl.style.color = label === 1 ? '#991b1b' : '#065f46';
-                doneEl.innerText = `✓ 已儲存：${labelText}`;
-            } catch (err) {
-                alert(`標記儲存失敗：${err.message}`);
-                document.querySelectorAll('.btn-sarco, .btn-no-sarco').forEach(b => b.disabled = false);
-            }
+        function renderRehabEducation(riskLevel, inferenceAvailable) {
+            const box = document.getElementById('rehabEducationBox');
+            box.style.display = 'block';
+            const needsAssessment = ['高', '中高', '高風險 (High Risk)',
+                '中高風險 (Moderate-High Risk)', '無法評估'].includes(riskLevel);
+            document.getElementById('rehabIntro').innerText = !inferenceAvailable
+                ? '本次沒有有效的 AI 風險結果；以下僅為一般性安全衛教，不是依本次檢測產生的建議，也不是個別運動處方。若日常活動已有困難，請先接受專業評估。'
+                : needsAssessment
+                ? '以下是一般性安全原則，不是個別運動處方。建議先由復健科、醫師或物理治療師評估，再依能力調整。'
+                : '以下是一般性安全原則，不是個別運動處方；從少量、可穩定完成的活動開始，再逐步增加。';
+            document.getElementById('rehabNextStep').innerText = !inferenceAvailable
+                ? '下一步：請由工作人員檢查錄影與骨架資料，並依日常功能決定是否安排復健科、家醫科或物理治療評估。'
+                : needsAssessment
+                ? '下一步：若起身、走路、上下樓梯已感困難，或近期有跌倒，請先安排專業評估，不要自行增加負重或高難度平衡訓練。'
+                : '下一步：先從少量、不疼痛、可穩定完成的活動開始；適應後才增加時間、次數或阻力。';
+            const items = [
+                '環境安全：穿防滑且合腳的鞋，移除地面障礙物；使用穩固、無輪子的椅子或固定桌面，平衡較差者請家人陪同。',
+                '肌力活動：可從坐到站、坐姿抬腿或已由專業人員教過的阻力活動開始；一般目標為每週至少 2 天，同一肌群兩次間至少休息 1 天。',
+                '平衡活動：在固定支撐物旁練習重心轉移或踏步；行動能力較差者以每週 3 天以上為一般目標，並由家人或專業人員確認安全。',
+                '步行與日常活動：減少長時間久坐，依能力從短時間步行或日常活動開始；無法達到一般建議量時，做能安全完成的量也有幫助。',
+                '飲食與追蹤：維持均衡飲食與足夠蛋白質；若有腎臟病、吞嚥或營養問題，請先詢問醫師或營養師。'
+            ];
+            const list = document.getElementById('rehabEducationList');
+            list.innerHTML = '';
+            items.forEach(text => {
+                const item = document.createElement('li');
+                item.innerText = text;
+                list.appendChild(item);
+            });
         }
 
         // ══════════════════════════════════════════════════════════
-        // 即時動作監測（純前端、僅提示，不評分動作標不標準）
+        // 即時動作監測（提示與計次用途，不判定動作品質或醫療診斷）
         //
-        // 錄影當下用瀏覽器版 MediaPipe 即時跑骨架，做三件事：
-        //   1) 入鏡檢查：肩膀到膝蓋是否都在畫面內
-        //   2) 起立坐下計次、半蹲維持 3 秒提示：用髖部上下位移的「相對幅度」自行校準，
-        //      不要求達到任何絕對角度／標準姿勢
-        //      （肌少症患者本來就可能做不出完整動作，因此門檻寬鬆）
-        //   3) 起立坐下自動結束；行走與半蹲由操作者手動停止
-        // 任何一步失敗都靜默降級，不影響原本的錄影/上傳/分析流程。
+        // C922 影像由電腦 FastAPI 伺服器逐格傳到凱比；瀏覽器版
+        // MediaPipe 直接分析同一張預覽影像。每 350 ms 最多分析一次，
+        // 避免凱比負載過高。偵測失敗時，錄影與上傳仍可繼續。
         // ══════════════════════════════════════════════════════════
 
         const VISION_TASKS_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
@@ -718,44 +1179,49 @@
         const LANDMARK = {
             L_SHOULDER: 11, R_SHOULDER: 12,
             L_HIP: 23, R_HIP: 24, L_KNEE: 25, R_KNEE: 26,
+            L_ANKLE: 27, R_ANKLE: 28,
         };
         const FRAMING_LANDMARKS = [
             LANDMARK.L_SHOULDER, LANDMARK.R_SHOULDER,
             LANDMARK.L_HIP, LANDMARK.R_HIP, LANDMARK.L_KNEE, LANDMARK.R_KNEE,
+            LANDMARK.L_ANKLE, LANDMARK.R_ANKLE,
         ];
 
-        const REP_TARGET = { sit: 5 };            // 半蹲是維持 3 秒，不是重複 5 次
-        const MIN_RECORD_SEC = 3;                 // 至少錄滿幾秒才允許自動停止，避免誤觸
-        const STILL_STOP_SEC = 4;                 // 已計到至少 1 下後，靜止多久視為「做不下去了」
-        const OUT_OF_FRAME_SEC = 1.2;             // 判定「未完整入鏡」所需的持續時間
-        const REP_MIN_RANGE = 0.035;              // 一次有效動作所需的最小上下位移（佔畫面高度比例）
-        const REP_CALIB_WINDOW_SEC = 8;           // 估計「這個人目前動作幅度」的視窗，涵蓋慢速個案的一次完整動作
-        const STILL_CHECK_WINDOW_SEC = 1.0;       // 判斷「現在有沒有在動」的短視窗
-        const SQUAT_HOLD_TARGET_SEC = 3;          // 半蹲協定要求：最低點維持約 3 秒（見 data_health_report.md 建議 3）
+        const REP_TARGET = { sit: 5 };
+        const MIN_RECORD_SEC = 3;
+        const OUT_OF_FRAME_SEC = 1.2;
+        const SIT_MAX_RECORD_MS = 60000;
+        const WALK_TARGET_DISPLACEMENT = 0.16;
+        const WALK_TARGET_STABLE_FRAMES = 2;
+        // 到達距離後還要站定：相鄰兩次偵測的髖部位移低於此值才算停下。
+        const WALK_STILL_MOTION = 0.012;
+        // 行走中持續看不到下半身超過此秒數，視為走出畫面，這次不列入分析。
+        const WALK_OUT_OF_FRAME_FAIL_SEC = 2.0;
+        const WALK_MAX_RECORD_MS = 30000;
+        const SQUAT_RECORD_MS = 4000;
+        const POSE_DETECT_INTERVAL_MS = 350;
 
         let PoseLandmarker, FilesetResolver, DrawingUtils;
         let poseLandmarker = null;
         let poseLoopHandle = null;
-        let currentRecordingActionId = null; // 'sit' | 'walk' | 'squat' | null
-        let autoStopTimer = null;
+        let lastPoseDetectionMs = -Infinity;
+        let currentRecordingActionId = null;
         let speechEnabled = true;
+        let liveSpeechChain = Promise.resolve();
 
         function resetLiveState() {
             return {
-                smoothedY: null,
-                longWindow: [],
-                shortWindow: [],
-                repState: 'unknown',
                 repCount: 0,
-                hasMoved: false,
-                stillSince: null,
+                sitCounter: window.SitToStandCounter?.createCounter() ?? null,
                 recordStart: 0,
                 outOfFrameSince: null,
                 lastSpokenAt: {},
                 autoStopTriggered: false,
-                holdStartAt: null,   // 半蹲：進入最低點的時間戳
-                holdAnnounced: -1,   // 半蹲：目前倒數已經播報到第幾秒，避免重複播報
-                holdCompleted: false,
+                actionCompleted: false,
+                walkOrigin: null,
+                walkLastCenter: null,
+                walkTargetFrames: 0,
+                timedStopHandle: null,
             };
         }
         let live = resetLiveState();
@@ -779,32 +1245,35 @@
                     console.warn('GPU 加速初始化失敗，改用 CPU：', gpuErr);
                     poseLandmarker = await createPoseLandmarker(filesetResolver, 'CPU');
                 }
+                setBanner('✅ 即時計次已就緒', 'ok');
+                setTimeout(() => {
+                    if (!currentRecordingActionId) setBanner('', null);
+                }, 1800);
                 poseLoopHandle = requestAnimationFrame(poseDetectLoop);
             } catch (err) {
                 console.warn('即時姿勢偵測無法啟用（不影響錄影與上傳）：', err);
+                setBanner('⚠️ 即時計次尚未啟用，錄影仍可使用', 'warn');
             }
         }
 
         function poseDetectLoop(timestampMs) {
-            const video = document.getElementById('webcam');
+            const image = document.getElementById('webcam');
             const canvas = document.getElementById('poseCanvas');
-            if (video.readyState >= 2 && video.videoWidth > 0 && poseLandmarker) {
-                if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                }
+            const frameReady = image.complete && image.naturalWidth > 0;
+            const intervalReached = timestampMs - lastPoseDetectionMs >= POSE_DETECT_INTERVAL_MS;
+
+            if (frameReady && intervalReached && poseLandmarker) {
+                lastPoseDetectionMs = timestampMs;
                 try {
-                    const result = poseLandmarker.detectForVideo(video, timestampMs);
+                    if (canvas.width !== image.naturalWidth || canvas.height !== image.naturalHeight) {
+                        canvas.width = image.naturalWidth;
+                        canvas.height = image.naturalHeight;
+                    }
+                    const result = poseLandmarker.detectForVideo(image, timestampMs);
                     renderPose(canvas, result);
                     evaluatePose(result, timestampMs / 1000);
                 } catch (err) {
-                    cancelPendingAutoStop();
-                    live = resetLiveState();
-                    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-                    setBadge('');
-                    setBanner('即時提示暫停，錄影仍可使用，請手動停止', 'warn');
-                    console.warn('即時姿勢偵測暫停（不影響錄影與上傳）：', err);
-                    return;
+                    console.warn('單幀姿勢偵測失敗：', err);
                 }
             }
             poseLoopHandle = requestAnimationFrame(poseDetectLoop);
@@ -816,149 +1285,137 @@
             const landmarks = result.landmarks && result.landmarks[0];
             if (landmarks) {
                 const drawer = new DrawingUtils(ctx);
-                drawer.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#4f46e5', lineWidth: 3 });
+                drawer.drawConnectors(
+                    landmarks,
+                    PoseLandmarker.POSE_CONNECTIONS,
+                    { color: '#4f46e5', lineWidth: 3 }
+                );
                 drawer.drawLandmarks(landmarks, { color: '#10b981', radius: 3 });
             }
         }
 
         function evaluatePose(result, nowSec) {
             const landmarks = result.landmarks && result.landmarks[0];
+            if (personInView(landmarks)) lastPersonSeenSec = nowSec;
+            handleAutoStart(landmarks, nowSec);
+            checkAutoStandby(nowSec);
+            const presenceFramingOk = checkFraming(landmarks);
+            const actionFramingOk = ['sit', 'walk'].includes(currentRecordingActionId)
+                ? checkSitToStandFraming(landmarks)
+                : presenceFramingOk;
+            handleAutomationPresence(presenceFramingOk, nowSec);
+            updatePendingActionReadiness(landmarks);
 
-            // 1) 入鏡檢查：不論是否正在錄影都提示，方便受測者事先站定位置
-            const framingOk = checkFraming(landmarks);
-            if (!framingOk) {
+            const fullBodyRequired = Boolean(currentRecordingActionId)
+                || automationServerState.state === 'profile_loaded';
+            if (fullBodyRequired && !actionFramingOk) {
                 if (live.outOfFrameSince === null) live.outOfFrameSince = nowSec;
                 if (nowSec - live.outOfFrameSince >= OUT_OF_FRAME_SEC) {
-                    setBanner('⚠️ 請確認全身（肩膀到膝蓋）都在畫面內', 'warn');
-                    speak('請完整入鏡');
+                    const framingMessage = ['sit', 'walk'].includes(currentRecordingActionId)
+                        ? '⚠️ 請確認肩、髖、膝與至少一側腳踝在畫面內'
+                        : '⚠️ 請確認全身（肩膀到腳踝）都在畫面內';
+                    setBanner(framingMessage, 'warn');
+                    // 姓名辨識時必須保持凱比安靜，否則頭上的 C922 會把
+                    // 凱比自己的提示音當成受測者回答。
+                    if (currentRecordingActionId || automationServerState.state === 'profile_loaded') {
+                        speak('請完整入鏡');
+                    }
                 }
-            } else {
+                if (currentRecordingActionId === 'walk' && live.walkOrigin && !live.autoStopTriggered
+                    && nowSec - live.outOfFrameSince >= WALK_OUT_OF_FRAME_FAIL_SEC) {
+                    // 已開始行走後走出畫面：停止並標記未完成，交由自動重試重錄。
+                    live.autoStopTriggered = true;
+                    setBanner('已走出畫面，這次行走不列入分析', 'warn');
+                    void autoStopCurrentRecording('走出畫面', 'warn');
+                }
+            } else if (fullBodyRequired) {
                 live.outOfFrameSince = null;
                 if (!currentRecordingActionId) setBanner('', null);
+            } else {
+                live.outOfFrameSince = null;
             }
 
-            if (!currentRecordingActionId) return;
-            if (!framingOk) {
-                // 失去可用骨架時，不把看不到人的時間算成持續維持或靜止。
-                live.holdStartAt = null;
-                live.holdAnnounced = -1;
-                live.repState = 'unknown';
-                live.smoothedY = null;
-                live.longWindow = [];
-                live.shortWindow = [];
-                live.stillSince = null;
-                live.hasMoved = false;
-                cancelPendingAutoStop();
-                live.autoStopTriggered = false;
-                return;
+            // 未完整入鏡時只提示，不把局部身體晃動計成一次動作。
+            // 這能避免人物靠鏡頭過近時，髖部位移造成錯誤加一。
+            if (!currentRecordingActionId && preparedSitCounter && checkSitToStandFraming(landmarks)) {
+                preparedSitCounter.update(window.SitToStandCounter.computeMetrics(landmarks));
             }
+            if (!currentRecordingActionId || !landmarks || !actionFramingOk) return;
 
             const elapsed = nowSec - live.recordStart;
-            if (currentRecordingActionId !== 'walk') {
-                evaluateRepMotion(landmarks, nowSec, elapsed);
-            }
+            if (currentRecordingActionId === 'walk') evaluateWalk(landmarks, nowSec, elapsed);
+            else if (currentRecordingActionId === 'sit') evaluateSitToStand(landmarks, elapsed);
         }
 
         function checkFraming(landmarks) {
             if (!landmarks) return false;
+            return FRAMING_LANDMARKS.every(i => landmarkIsInFrame(landmarks[i]));
+        }
+
+        function landmarkIsInFrame(point) {
             const margin = 0.03;
-            return FRAMING_LANDMARKS.every(i => {
-                const p = landmarks[i];
-                if (!p || (p.visibility ?? 1) < 0.5) return false;
-                return p.x > margin && p.x < 1 - margin && p.y > margin && p.y < 1 - margin;
-            });
+            return Boolean(point)
+                && (point.visibility ?? 1) >= 0.5
+                && point.x > margin && point.x < 1 - margin
+                && point.y > margin && point.y < 1 - margin;
         }
 
-        // 起立坐下／半蹲共用同一套邏輯：追蹤髖部上下位移，
-        // 用「最近幾秒觀察到的幅度」自行校準門檻，而非要求固定角度。
-        function evaluateRepMotion(landmarks, nowSec, elapsed) {
-            const hipY = (landmarks[LANDMARK.L_HIP].y + landmarks[LANDMARK.R_HIP].y) / 2;
-            live.smoothedY = live.smoothedY === null ? hipY : live.smoothedY * 0.7 + hipY * 0.3;
-
-            live.longWindow.push({ t: nowSec, y: live.smoothedY });
-            while (live.longWindow.length && nowSec - live.longWindow[0].t > REP_CALIB_WINDOW_SEC) live.longWindow.shift();
-
-            live.shortWindow.push({ t: nowSec, y: live.smoothedY });
-            while (live.shortWindow.length && nowSec - live.shortWindow[0].t > STILL_CHECK_WINDOW_SEC) live.shortWindow.shift();
-            if (live.shortWindow.length >= 3) {
-                const sYs = live.shortWindow.map(p => p.y);
-                const sRange = Math.max(...sYs) - Math.min(...sYs);
-                // 半蹲在最低點刻意維持不動是協定要求，不能被當成「動作已停止」
-                const isIntentionalHold = (currentRecordingActionId === 'squat' && live.repState === 'down');
-                trackMovement(sRange >= REP_MIN_RANGE * 0.25 || isIntentionalHold, nowSec);
-            }
-
-            if (live.longWindow.length < 5) return;
-            const ys = live.longWindow.map(p => p.y);
-            const yMin = Math.min(...ys), yMax = Math.max(...ys);
-            const range = yMax - yMin;
-
-            if (range >= REP_MIN_RANGE) {
-                const thUp = yMin + range * 0.3;
-                const thDown = yMin + range * 0.7;
-                // 從坐姿開始時，第一下起立也算一次；校準前狀態尚未設成 down。
-                if (currentRecordingActionId === 'sit' && live.repState === 'unknown'
-                    && live.longWindow[0].y >= thDown) {
-                    live.repState = 'down';
-                }
-                if (live.smoothedY <= thUp) {
-                    if (live.repState === 'down' && currentRecordingActionId === 'sit') {
-                        live.repCount++;
-                        onRepCounted(currentRecordingActionId, live.repCount);
-                    }
-                    live.repState = 'up';
-                } else if (live.smoothedY >= thDown) {
-                    live.repState = 'down';
-                } else if (currentRecordingActionId === 'squat') {
-                    live.repState = 'unknown';
-                }
-            }
-
-            if (currentRecordingActionId === 'squat') {
-                handleSquatHold(nowSec);
-                return; // 半蹲完成後仍由操作者手動停止，不計次、不因靜止而停止
-            }
-
-            maybeAutoStopByReps(currentRecordingActionId, elapsed);
-            maybeAutoStopByStillness(elapsed, true, STILL_STOP_SEC, nowSec);
+        function checkSitToStandFraming(landmarks) {
+            if (!landmarks) return false;
+            const core = [
+                LANDMARK.L_SHOULDER, LANDMARK.R_SHOULDER,
+                LANDMARK.L_HIP, LANDMARK.R_HIP,
+                LANDMARK.L_KNEE, LANDMARK.R_KNEE,
+            ];
+            const coreVisible = core.every(i => landmarkIsInFrame(landmarks[i]));
+            const oneAnkleVisible = [LANDMARK.L_ANKLE, LANDMARK.R_ANKLE]
+                .some(i => landmarkIsInFrame(landmarks[i]));
+            return coreVisible && oneAnkleVisible;
         }
 
-        // 半蹲最低點維持提示：協定要求約 3 秒，用倒數口令引導（不強制，撐不到也不扣分）
-        function handleSquatHold(nowSec) {
-            if (live.holdCompleted) return;
-            if (live.repState !== 'down') {
-                live.holdStartAt = null;
-                live.holdAnnounced = -1;
+        function evaluateSitToStand(landmarks, elapsed) {
+            if (!live.sitCounter || !window.SitToStandCounter) {
+                setBadge('即時計次未就緒，請由工作人員協助');
                 return;
             }
-            if (live.holdStartAt === null) {
-                live.holdStartAt = nowSec;
-                live.holdAnnounced = -1;
-                setBanner('👇 撐住，維持姿勢', 'info');
-                speak('撐住');
-                return;
-            }
-            const heldFor = nowSec - live.holdStartAt;
-            const remaining = Math.max(0, Math.ceil(SQUAT_HOLD_TARGET_SEC - heldFor));
-            if (remaining > 0 && remaining < SQUAT_HOLD_TARGET_SEC && remaining !== live.holdAnnounced) {
-                live.holdAnnounced = remaining;
-                speak(String(remaining));
-            } else if (remaining === 0 && live.holdAnnounced !== 0) {
-                live.holdAnnounced = 0;
-                live.holdCompleted = true;
-                setBanner('✅ 已維持 3 秒，請手動停止錄影', 'ok');
-                setBadge('維持完成，請手動停止');
-                speak('已維持三秒，請手動停止錄影');
-            }
+            const metrics = window.SitToStandCounter.computeMetrics(landmarks);
+            const result = live.sitCounter.update(metrics);
+            live.repCount = result.repCount;
+            if (result.counted) onRepCounted('sit', result.repCount);
+            else setBadge(`${result.repCount} / ${REP_TARGET.sit} 下 · ${result.reason}`);
+            maybeAutoStopByReps('sit', elapsed);
         }
 
-        function trackMovement(isMoving, nowSec) {
-            if (isMoving) {
-                live.hasMoved = true;
-                live.stillSince = null;
-            } else if (live.hasMoved && live.stillSince === null) {
-                live.stillSince = nowSec;
+        function evaluateWalk(landmarks, nowSec, elapsed) {
+            const centerX = (landmarks[LANDMARK.L_HIP].x + landmarks[LANDMARK.R_HIP].x) / 2;
+            const centerY = (landmarks[LANDMARK.L_HIP].y + landmarks[LANDMARK.R_HIP].y) / 2;
+            if (!live.walkOrigin) {
+                live.walkOrigin = { x: centerX, y: centerY };
+                return;
             }
+            const displacement = Math.hypot(
+                centerX - live.walkOrigin.x,
+                centerY - live.walkOrigin.y
+            );
+            const motion = live.walkLastCenter
+                ? Math.hypot(centerX - live.walkLastCenter.x, centerY - live.walkLastCenter.y)
+                : Infinity;
+            live.walkLastCenter = { x: centerX, y: centerY };
+            // 只走到距離還不夠，必須在終點站定；否則受測者仍在行走時就判定到達，會繼續走出畫面。
+            live.walkTargetFrames = displacement >= WALK_TARGET_DISPLACEMENT
+                && motion <= WALK_STILL_MOTION
+                ? live.walkTargetFrames + 1 : 0;
+            setBadge(`走向終點 · ${Math.min(100, Math.round(
+                displacement / WALK_TARGET_DISPLACEMENT * 100
+            ))}%`);
+            if (elapsed < MIN_RECORD_SEC || live.autoStopTriggered
+                || live.walkTargetFrames < WALK_TARGET_STABLE_FRAMES) return;
+            live.autoStopTriggered = true;
+            live.actionCompleted = true;
+            setBanner('✅ 已到達終點定位，即將結束錄影', 'ok');
+            // 站定後立即停止錄影、同時播報，避免播報期間人物移動造成影片後段缺漏。
+            void queueSpeech('已到達終點，錄影即將結束', { minimumMs: 500 });
+            void autoStopCurrentRecording('已到達終點定位');
         }
 
         function onRepCounted(actionId, count) {
@@ -969,62 +1426,1068 @@
 
         function maybeAutoStopByReps(actionId, elapsed) {
             const target = REP_TARGET[actionId];
-            if (!target || live.autoStopTriggered) return;
-            if (elapsed < MIN_RECORD_SEC) return;
+            if (!target || live.autoStopTriggered || elapsed < MIN_RECORD_SEC) return;
             if (live.repCount >= target) {
                 live.autoStopTriggered = true;
                 setBanner(`✅ 已完成 ${target} 下，即將自動結束錄影`, 'ok');
-                speak(`已完成${target}下，錄影即將結束`);
-                scheduleAutoStop('已完成目標次數');
+                void queueSpeech(`已完成${target}下，錄影即將結束`, { minimumMs: 500 })
+                    .then(() => autoStopCurrentRecording('已完成目標次數'));
             }
         }
 
-        function maybeAutoStopByStillness(elapsed, requireAtLeastOneRep, stopAfterSec, nowSec) {
-            if (live.autoStopTriggered) return;
-            if (elapsed < MIN_RECORD_SEC) return;
-            if (requireAtLeastOneRep && live.repCount < 1) return;
-            if (!live.hasMoved) return;
-            if (live.stillSince !== null && (nowSec - live.stillSince) >= stopAfterSec) {
-                live.autoStopTriggered = true;
-                setBanner('ℹ️ 偵測到動作已停止，自動結束錄影', 'ok');
-                speak('偵測到動作已停止，錄影即將結束');
-                scheduleAutoStop('偵測到動作停止');
-            }
-        }
-
-        // ── 提示 UI／語音 ─────────────────────────────────────────
         function setBanner(text, kind) {
-            const el = document.getElementById('liveBanner');
-            if (!text) { el.style.display = 'none'; return; }
-            el.textContent = text;
-            el.className = `live-banner live-banner-${kind || 'info'}`;
-            el.style.display = 'block';
+            const element = document.getElementById('liveBanner');
+            if (!text) {
+                element.style.display = 'none';
+                return;
+            }
+            element.textContent = text;
+            element.className = `live-banner live-banner-${kind || 'info'}`;
+            element.style.display = 'block';
         }
 
         function setBadge(text) {
-            const el = document.getElementById('liveRepBadge');
-            if (!text) { el.style.display = 'none'; return; }
-            el.textContent = text;
-            el.style.display = 'block';
+            const element = document.getElementById('liveRepBadge');
+            if (!text) {
+                element.style.display = 'none';
+                return;
+            }
+            element.textContent = text;
+            element.style.display = 'block';
         }
 
-        function toggleSpeech(btn) {
+        // ── 電腦啟動、入鏡偵測、QR 身分確認與自動測試 ──────────
+        const AUTOMATION_STATE_LABELS = {
+            idle: '待機', armed: '等待受測者靠近', scanning_qr: '掃描 QR Code',
+            profile_loaded: '等待完整入鏡', testing: '自動測試中',
+            completed: '本輪完成', error: '需要協助'
+        };
+        const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const AUTOMATED_ACTIONS = [
+            {
+                id: 'sit',
+                prompt: '第一項是五次起立坐下。請坐在穩固且沒有輪子的椅子上，雙手交叉於胸前。聽到開始後，連續完成五次。',
+                readyPrompt: '請先坐穩，雙腳踩地。系統確認坐姿後會自動倒數。'
+            },
+            {
+                id: 'walk',
+                prompt: '第二項是行走測試。請站在起點，聽到開始後走向地面標示的終點。系統判斷到達終點後會自動停止。',
+                readyPrompt: '請站在起點保持站穩。系統確認站姿後會自動倒數。'
+            },
+            {
+                id: 'squat',
+                prompt: '第三項是半蹲測試。請站穩，聽到開始後做一次半蹲，保持姿勢，系統錄影四秒後會自動停止。若感到不適，請立即停止。',
+                readyPrompt: '請站直並保持身體穩定。系統確認站姿後會自動倒數。'
+            },
+        ];
+        const READINESS_OVERRIDE_DELAY_MS = 12000;
+        const TTS_TIMEOUT_MIN_MS = 2500;
+        const TTS_TIMEOUT_MAX_MS = 18000;
+        const RECORDED_AUDIO_TIMEOUT_BUFFER_MS = 2000;
+        // 問句完整播放結束後先保留一段安靜時間，再啟動錄音並播放提示嗶聲。
+        // 這可避免凱比喇叭的尾音被自己的麥克風收進姓名錄音。
+        const POST_TTS_LISTEN_DELAY_MS = 800;
+        const MANUAL_NAME_FALLBACK_DELAY_MS = 12000;
+        const QR_PROMPT = '請給我看您的 QR Code。';
+        const KEBBI_GREETING = '您好，我是肌少症預防守護者，凱比。今天由我陪您做檢測。';
+        // 自動偵測：有人站在鏡頭前（肩寬夠大，代表夠近）並站定一段時間才開始，
+        // 背景走過的人不會觸發。誤觸發時由自動取消或工作人員「立即停止」回到待命。
+        const AUTO_START_STILL_SEC = 2.5;
+        const AUTO_START_MIN_SHOULDER_SPAN = 0.12;
+        // 判斷「畫面中有人」的最低肩寬：空房間的椅子、水桶偶爾會被誤認成小骨架，需排除。
+        const AUTO_PRESENCE_MIN_SHOULDER_SPAN = 0.06;
+        const AUTO_START_MAX_MOTION = 0.03;
+        const AUTO_CANCEL_NO_QR_MS = 30000;
+        const AUTO_CANCEL_ABSENT_SEC = 10;
+        const AUTO_RESULT_HOLD_MAX_SEC = 90;
+        // 回到待命後，畫面需淨空這麼久才允許下一次觸發，避免剛中止的人立刻又觸發。
+        const AUTO_CLEAR_SEC = 1.5;
+        let lastPersonSeenSec = 0;
+        let autoStartSince = null;
+        let autoStartLastCenter = null;
+        let armedNeedsClear = true;
+        let autoStandbyRequested = false;
+        let automationResultShownAt = null;
+        let speechCaptureActive = false;
+        const RECORDED_PROMPTS = Object.freeze({
+            '您好，請在畫面輸入您的姓名，完成後按確認姓名。': '/static/tts/manual_name.mp3',
+            '您好，請在嗶聲後，只說您的姓名，例如王小明。': '/static/tts/ask_name.mp3?v=2',
+            '您好，基本資料已載入。接下來將依序進行三項動作測試。': '/static/tts/profile_loaded.mp3',
+            [AUTOMATED_ACTIONS[0].prompt]: '/static/tts/sit_prompt.mp3',
+            [AUTOMATED_ACTIONS[1].prompt]: '/static/tts/walk_prompt.mp3',
+            [AUTOMATED_ACTIONS[2].prompt]: '/static/tts/squat_prompt.mp3',
+            [AUTOMATED_ACTIONS[0].readyPrompt]: '/static/tts/sit_ready.mp3',
+            [AUTOMATED_ACTIONS[1].readyPrompt]: '/static/tts/walk_ready.mp3',
+            [AUTOMATED_ACTIONS[2].readyPrompt]: '/static/tts/squat_ready.mp3',
+            '姿勢已就緒，準備倒數。': '/static/tts/pose_ready.mp3',
+            '1': '/static/tts/count_1.mp3',
+            '2': '/static/tts/count_2.mp3',
+            '3': '/static/tts/count_3.mp3',
+            '4': '/static/tts/count_4.mp3',
+            '5': '/static/tts/count_5.mp3',
+            '開始': '/static/tts/start.mp3',
+            '結束': '/static/tts/end.mp3',
+            '請完整入鏡': '/static/tts/enter_frame.mp3',
+            '撐住': '/static/tts/hold.mp3',
+            '很好': '/static/tts/good.mp3',
+            '已完成5下，錄影即將結束': '/static/tts/complete_5.mp3',
+            '偵測到動作已停止，錄影即將結束': '/static/tts/movement_stopped.mp3',
+            [ACTION_RETRY_PROMPT]: '/static/tts/retry.mp3',
+            '半蹲動作已記錄，錄影即將結束': '/static/tts/squat_recorded.mp3',
+            '已到達終點，錄影即將結束': '/static/tts/walk_arrived.mp3',
+            '三項動作已完成，正在進行分析，請稍候。': '/static/tts/analysis.mp3',
+            [QR_PROMPT]: '/static/tts/qr_prompt.mp3',
+            [KEBBI_GREETING]: '/static/tts/greeting.mp3',
+        });
+
+        async function requestJson(path, options = {}, timeoutMs = 8000) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const response = await fetch(`${API_BASE}${path}`, {
+                    ...options,
+                    signal: controller.signal,
+                });
+                if (!response.ok) {
+                    let detail = `HTTP ${response.status}`;
+                    try { detail = (await response.json()).detail || detail; } catch (_) {}
+                    throw new Error(detail);
+                }
+                return response.json();
+            } catch (error) {
+                if (error.name === 'AbortError') throw new Error('伺服器回應逾時');
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+            }
+        }
+
+        function updateAutomationPanel(state) {
+            document.getElementById('automationStateText').textContent =
+                AUTOMATION_STATE_LABELS[state.state] || state.state;
+            document.getElementById('automationMessage').textContent = state.message || '';
+            updateFlowTimeline(state);
+        }
+
+        function updateFlowTimeline(state = automationServerState) {
+            const steps = Array.from(document.querySelectorAll('[data-flow-step]'));
+            if (!steps.length) return;
+            let activeIndex = -1;
+            let doneThrough = -1;
+            if (state.state === 'scanning_qr') activeIndex = 0;
+            else if (state.state === 'profile_loaded') {
+                doneThrough = 0;
+                activeIndex = 1;
+            } else if (state.state === 'testing') {
+                doneThrough = Math.max(1, automationActionIndex + 1);
+                activeIndex = Math.min(4, Math.max(2, automationActionIndex + 2));
+            } else if (state.state === 'completed') {
+                doneThrough = 4;
+                activeIndex = 5;
+            }
+            steps.forEach((step, index) => {
+                step.classList.toggle('is-done', index <= doneThrough);
+                step.classList.toggle('is-active', index === activeIndex);
+                step.classList.toggle('is-error', state.state === 'error' && index === activeIndex);
+                if (index === activeIndex) step.setAttribute('aria-current', 'step');
+                else step.removeAttribute('aria-current');
+            });
+        }
+
+        function prepareAutomationCycle() {
+            cancelPendingActionReadiness();
+            automationResultShownAt = null;
+            videoData = { sit: null, walk: null, squat: null };
+            ['subjectId', 'age', 'height', 'weight'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            document.getElementById('gender').value = '';
+            document.getElementById('recordView').style.display = 'block';
+            document.getElementById('resultView').style.display = 'none';
+            document.getElementById('progressArea').style.display = 'none';
+            document.getElementById('btnSubmit').disabled = false;
+            document.getElementById('btnSubmit').innerText = '🚀 傳送影片進行 AI 分析';
+            ['sit', 'walk', 'squat'].forEach(actionId => {
+                const button = document.getElementById(BTN_ID_MAP[actionId]);
+                button.disabled = false;
+                button.style.backgroundColor = '';
+                button.innerText = `錄製：${ACTION_LABEL[actionId]}`;
+            });
+            ['Sit', 'Walk', 'Squat'].forEach(action => setStatus(action, 'waiting', '等待中'));
+            if (!NO_HARDWARE_SIMULATION_MODE && !poseLandmarker && !poseLoopHandle) initPoseTracking();
+        }
+
+        function cancelLocalAutomation() {
+            automationRunToken++;
+            identityFlowToken++;
+            automationSequenceActive = false;
+            identityFlowRunning = false;
+            automationPresenceSince = null;
+            cancelPendingActionReadiness();
+            stopPromptPlayback();
+            clearInterval(timerInterval);
+            if (activeActionId) {
+                const button = document.getElementById(BTN_ID_MAP[activeActionId]);
+                button.innerText = `錄製：${ACTION_LABEL[activeActionId]}`;
+                button.style.backgroundColor = '';
+            }
+            isRecording = false;
+            activeActionId = null;
+            currentRecordingActionId = null;
+            setBadge('');
+            setBtnState('', false);
+            document.getElementById('manualNameFallback').style.display = 'none';
+        }
+
+        async function pollAutomationState() {
+            if (!isActiveAutomationTab) return;
+            try {
+                const previousState = automationServerState.state;
+                const state = await requestJson('/automation/state');
+                automationServerState = state;
+                updateAutomationPanel(state);
+
+                if (state.state === 'idle' && previousState !== 'idle') {
+                    cancelLocalAutomation();
+                    setBanner('', null);
+                } else if (state.state === 'armed') {
+                    if (previousState !== 'armed') {
+                        cancelLocalAutomation();
+                        prepareAutomationCycle();
+                        armedNeedsClear = true;
+                        autoStandbyRequested = false;
+                    }
+                    setBanner('自動偵測待命中：請走到鏡頭前站好', 'info');
+                } else if (state.state === 'scanning_qr') {
+                    // 新一輪流程現在會從 idle 直接進入 QR 掃描；首次進入時
+                    // 必須清除上一位的表單、影片與動作狀態，避免展場畫面
+                    // 在尚未辨識 QR 前顯示舊受測者資料。
+                    if (previousState !== 'scanning_qr') prepareAutomationCycle();
+                    if (!identityFlowRunning) {
+                        identityFlowRunning = true;
+                        startQrIdentityFlow();
+                    }
+                } else if (state.state === 'profile_loaded' && state.participant
+                           && !identityFlowRunning && !automationSequenceActive
+                           && !currentRecordingActionId) {
+                    // 身分資料由伺服器保存；重新整理後仍要重新確認全身入鏡，
+                    // 不可直接跳進動作測試。
+                    loadParticipantIntoForm(state.participant);
+                    identityFlowRunning = false;
+                    setBanner('✅ 身分已確認，請退後並讓肩膀、髖部、膝蓋與腳踝完整入鏡', 'info');
+                    if (previousState !== 'profile_loaded') void speakAsync('請完整入鏡');
+                }
+            } catch (error) {
+                document.getElementById('automationMessage').textContent = `控制連線失敗：${error.message}`;
+            }
+        }
+
+        function personInView(landmarks, minSpan = AUTO_PRESENCE_MIN_SHOULDER_SPAN) {
+            if (!landmarks) return false;
+            const left = landmarks[LANDMARK.L_SHOULDER];
+            const right = landmarks[LANDMARK.R_SHOULDER];
+            return landmarkIsInFrame(left) && landmarkIsInFrame(right)
+                && Math.abs(left.x - right.x) >= minSpan;
+        }
+
+        function handleAutoStart(landmarks, nowSec) {
+            if (!isActiveAutomationTab || automationServerState.state !== 'armed' || !kebbiAudioReady) {
+                autoStartSince = null;
+                return;
+            }
+            if (!personInView(landmarks)) {
+                autoStartSince = null;
+                if (nowSec - lastPersonSeenSec >= AUTO_CLEAR_SEC) armedNeedsClear = false;
+                return;
+            }
+            if (armedNeedsClear) return;
+            const left = landmarks[LANDMARK.L_SHOULDER];
+            const right = landmarks[LANDMARK.R_SHOULDER];
+            const near = personInView(landmarks, AUTO_START_MIN_SHOULDER_SPAN);
+            const center = near ? { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 } : null;
+            const moving = center && autoStartLastCenter
+                && Math.hypot(center.x - autoStartLastCenter.x, center.y - autoStartLastCenter.y)
+                    > AUTO_START_MAX_MOTION;
+            autoStartLastCenter = center;
+            if (!near || moving) {
+                autoStartSince = null;
+                return;
+            }
+            if (autoStartSince === null) autoStartSince = nowSec;
+            if (nowSec - autoStartSince < AUTO_START_STILL_SEC) return;
+            autoStartSince = null;
+            armedNeedsClear = true;
+            requestJson('/automation/person-detected', { method: 'POST' })
+                .then(state => {
+                    automationServerState = state;
+                    updateAutomationPanel(state);
+                })
+                .catch(error => console.warn('自動開始失敗：', error));
+        }
+
+        function checkAutoStandby(nowSec) {
+            const state = automationServerState;
+            if (!isActiveAutomationTab || !state.auto_mode || autoStandbyRequested
+                || automationSequenceActive || currentRecordingActionId) return;
+            const absent = nowSec - lastPersonSeenSec >= AUTO_CANCEL_ABSENT_SEC;
+            if (['scanning_qr', 'profile_loaded', 'error'].includes(state.state) && absent) {
+                void returnToAutoStandby('受測者已離開，回到待命');
+            } else if (state.state === 'completed' && automationResultShownAt !== null
+                       && (absent || nowSec - automationResultShownAt >= AUTO_RESULT_HOLD_MAX_SEC)) {
+                // 只在結果已顯示後才回到待命，避免分析途中清掉畫面。
+                void returnToAutoStandby('本輪完成，等待下一位');
+            }
+        }
+
+        // 只通知伺服器；畫面重置交給 pollAutomationState 進入 armed 時統一處理。
+        async function returnToAutoStandby(message) {
+            const state = automationServerState;
+            if (!state.auto_mode || autoStandbyRequested) return;
+            autoStandbyRequested = true;
+            try {
+                await requestJson('/automation/standby', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message,
+                        expected_state: state.state,
+                        expected_revision: state.revision,
+                    })
+                });
+            } catch (error) {
+                console.warn('回到待命失敗：', error);
+            } finally {
+                autoStandbyRequested = false;
+            }
+        }
+
+        function handleAutomationPresence(framingOk, nowSec) {
+            if (!isActiveAutomationTab) return;
+            if (!kebbiAudioReady) {
+                automationPresenceSince = null;
+                setBanner('🔊 請先點畫面上的「啟用語音」', 'warn');
+                return;
+            }
+
+            if (automationServerState.state !== 'profile_loaded' || identityFlowRunning
+                || automationSequenceActive || !automationServerState.participant) {
+                automationPresenceSince = null;
+                return;
+            }
+            if (!framingOk) {
+                automationPresenceSince = null;
+                return;
+            }
+            if (automationPresenceSince === null) automationPresenceSince = nowSec;
+            if (nowSec - automationPresenceSince < 2.5) return;
+
+            automationPresenceSince = null;
+            setBanner('✅ 全身入鏡確認完成，準備開始動作測試', 'ok');
+            void beginAutomatedTests(automationServerState.participant);
+        }
+
+        function readinessElements() {
+            return {
+                card: document.getElementById('readinessCard'),
+                title: document.getElementById('readinessTitle'),
+                status: document.getElementById('readinessStatus'),
+                progress: document.getElementById('readinessProgress'),
+                override: document.getElementById('readinessOverride'),
+            };
+        }
+
+        // 只沿用「已校正且仍在坐姿、尚未計次」的計數器；倒數期間若起身就重新校正。
+        function takePreparedSitCounter() {
+            const counter = preparedSitCounter;
+            preparedSitCounter = null;
+            if (!counter) return null;
+            const { baselineHipY, phase, repCount } = counter.state;
+            return baselineHipY !== null && phase === 'down' && repCount === 0 ? counter : null;
+        }
+
+        function waitForActionReadiness(step, token) {
+            cancelPendingActionReadiness();
+            preparedSitCounter = step.id === 'sit'
+                ? window.SitToStandCounter?.createCounter() ?? null
+                : null;
+            const elements = readinessElements();
+            elements.card.hidden = false;
+            elements.title.textContent = `${ACTION_LABEL[step.id]}：等待就緒`;
+            elements.status.textContent = step.readyPrompt;
+            elements.progress.style.width = '0%';
+            elements.override.hidden = true;
+
+            return new Promise(resolve => {
+                let gate = null;
+                try {
+                    gate = window.ActionReadiness?.createGate(step.id) ?? null;
+                } catch (error) {
+                    console.warn('動作就緒偵測器無法建立：', error);
+                }
+                const overrideTimer = setTimeout(() => {
+                    if (!pendingActionReadiness || pendingActionReadiness.token !== token) return;
+                    elements.override.hidden = false;
+                    elements.status.textContent = gate
+                        ? '仍在等待穩定姿勢；工作人員確認安全後可手動繼續。'
+                        : '姿勢偵測未就緒；請由工作人員確認安全後繼續。';
+                }, gate ? READINESS_OVERRIDE_DELAY_MS : 0);
+                pendingActionReadiness = {
+                    actionId: step.id,
+                    token,
+                    gate,
+                    resolve,
+                    overrideTimer,
+                    settled: false,
+                };
+            });
+        }
+
+        function updatePendingActionReadiness(landmarks) {
+            const pending = pendingActionReadiness;
+            if (!pending || pending.settled || !pending.gate
+                || pending.token !== automationRunToken || !automationSequenceActive) return;
+            const result = pending.gate.update(landmarks);
+            const elements = readinessElements();
+            elements.status.textContent = result.reason;
+            elements.progress.style.width = `${Math.round(result.progress * 100)}%`;
+            setBanner(`${ACTION_LABEL[pending.actionId]}：${result.reason}`, result.ready ? 'ok' : 'info');
+            if (result.ready) completePendingActionReadiness(false);
+        }
+
+        function completePendingActionReadiness(forced) {
+            const pending = pendingActionReadiness;
+            if (!pending || pending.settled) return;
+            pending.settled = true;
+            clearTimeout(pending.overrideTimer);
+            if (forced && pending.gate) pending.gate.forceReady();
+            const elements = readinessElements();
+            elements.progress.style.width = '100%';
+            elements.status.textContent = forced ? '已由工作人員確認就緒' : '姿勢已穩定';
+            elements.override.hidden = true;
+            setTimeout(() => {
+                if (!pendingActionReadiness || pendingActionReadiness !== pending) return;
+                elements.card.hidden = true;
+                pendingActionReadiness = null;
+            }, 300);
+            pending.resolve(true);
+        }
+
+        function cancelPendingActionReadiness() {
+            const pending = pendingActionReadiness;
+            if (!pending) return;
+            pending.settled = true;
+            clearTimeout(pending.overrideTimer);
+            pendingActionReadiness = null;
+            const elements = readinessElements();
+            elements.card.hidden = true;
+            elements.override.hidden = true;
+            elements.progress.style.width = '0%';
+            pending.resolve(false);
+        }
+
+        function confirmActionReadiness() {
+            if (!pendingActionReadiness || pendingActionReadiness.settled) return;
+            completePendingActionReadiness(true);
+        }
+
+        function estimateTtsTimeoutMs(text) {
+            return Math.min(
+                TTS_TIMEOUT_MAX_MS,
+                Math.max(TTS_TIMEOUT_MIN_MS, 1200 + String(text).length * 180)
+            );
+        }
+
+        function stopPromptPlayback() {
+            if (activePromptAudio) {
+                try {
+                    activePromptAudio.pause();
+                    activePromptAudio.currentTime = 0;
+                } catch (_) {}
+                activePromptAudio = null;
+            }
+            if ('speechSynthesis' in window) {
+                try { window.speechSynthesis.cancel(); } catch (_) {}
+            }
+        }
+
+        function speakAsync(text, { minimumMs = 0, timeoutMs = estimateTtsTimeoutMs(text) } = {}) {
+            return new Promise(resolve => {
+                const startedAt = Date.now();
+                let settled = false;
+                let timeoutHandle = null;
+                let promptAudio = null;
+                const armTimeout = milliseconds => {
+                    if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+                    timeoutHandle = setTimeout(() => {
+                        console.warn(`語音播放逾時，流程自動繼續：${text}`);
+                        stopPromptPlayback();
+                        finish();
+                    }, milliseconds);
+                };
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+                    if (activePromptAudio === promptAudio) activePromptAudio = null;
+                    const remaining = Math.max(0, minimumMs - (Date.now() - startedAt));
+                    setTimeout(resolve, remaining);
+                };
+
+                if (!speechEnabled) {
+                    setTimeout(resolve, minimumMs);
+                    return;
+                }
+
+                stopPromptPlayback();
+                armTimeout(timeoutMs);
+
+                const useBrowserTtsFallback = () => {
+                    if (settled) return;
+                    if (!('speechSynthesis' in window)
+                        || typeof SpeechSynthesisUtterance === 'undefined') {
+                        finish();
+                        return;
+                    }
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'zh-TW';
+                    utterance.rate = 0.95;
+                    utterance.onend = finish;
+                    utterance.onerror = finish;
+                    try {
+                        window.speechSynthesis.speak(utterance);
+                    } catch (error) {
+                        console.warn('瀏覽器語音播放失敗，流程自動繼續：', error);
+                        finish();
+                    }
+                };
+
+                const recordedUrl = RECORDED_PROMPTS[text];
+                if (!recordedUrl || typeof Audio === 'undefined') {
+                    useBrowserTtsFallback();
+                    return;
+                }
+
+                promptAudio = new Audio(recordedUrl);
+                activePromptAudio = promptAudio;
+                promptAudio.preload = 'auto';
+                promptAudio.onloadedmetadata = () => {
+                    if (!Number.isFinite(promptAudio.duration) || promptAudio.duration <= 0) return;
+                    const audioTimeoutMs = Math.ceil(promptAudio.duration * 1000)
+                        + RECORDED_AUDIO_TIMEOUT_BUFFER_MS;
+                    armTimeout(Math.max(timeoutMs, audioTimeoutMs));
+                };
+                promptAudio.onended = finish;
+                promptAudio.onerror = () => {
+                    if (activePromptAudio === promptAudio) activePromptAudio = null;
+                    console.warn(`提示音檔播放失敗，改用瀏覽器 TTS：${recordedUrl}`);
+                    useBrowserTtsFallback();
+                };
+                try {
+                    const playResult = promptAudio.play();
+                    if (playResult && typeof playResult.catch === 'function') {
+                        playResult.catch(error => {
+                            if (activePromptAudio === promptAudio) activePromptAudio = null;
+                            console.warn('提示音檔遭瀏覽器阻擋，改用瀏覽器 TTS：', error);
+                            useBrowserTtsFallback();
+                        });
+                    }
+                } catch (error) {
+                    console.warn('提示音檔無法啟動，改用瀏覽器 TTS：', error);
+                    useBrowserTtsFallback();
+                }
+            });
+        }
+
+        async function recognizeWithServer(purpose) {
+            speechCaptureActive = true;
+            stopPromptPlayback();
+            setBanner('🎤 電腦正在透過 C922 麥克風收音，請清楚說話', 'info');
+            try {
+                const result = await requestJson('/speech/listen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        purpose,
+                        duration_seconds: purpose === 'confirmation' ? 3.5 : 4.5
+                    })
+                });
+                if (!Array.isArray(result.transcripts) || result.transcripts.length === 0) {
+                    throw new Error('沒有辨識到清楚語音');
+                }
+                return result.transcripts;
+            } finally {
+                speechCaptureActive = false;
+            }
+        }
+
+        function supportsKebbiMicrophone() {
+            return Boolean(
+                navigator.mediaDevices
+                && navigator.mediaDevices.getUserMedia
+                && typeof MediaRecorder !== 'undefined'
+                && typeof FormData !== 'undefined'
+            );
+        }
+
+        function preferredAudioMimeType() {
+            if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+            return [
+                'audio/webm;codecs=opus',
+                'audio/ogg;codecs=opus',
+                'audio/webm',
+                'audio/ogg'
+            ].find(type => MediaRecorder.isTypeSupported(type)) || '';
+        }
+
+        function playListeningBeep() {
+            return new Promise(resolve => {
+                const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextCtor) {
+                    resolve();
+                    return;
+                }
+                let context;
+                try {
+                    context = new AudioContextCtor();
+                    const oscillator = context.createOscillator();
+                    const gain = context.createGain();
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = 880;
+                    gain.gain.value = 0.12;
+                    oscillator.connect(gain);
+                    gain.connect(context.destination);
+                    oscillator.onended = () => {
+                        Promise.resolve(context.close()).finally(resolve);
+                    };
+                    oscillator.start();
+                    oscillator.stop(context.currentTime + 0.18);
+                } catch (_) {
+                    if (context) Promise.resolve(context.close()).finally(resolve);
+                    else resolve();
+                }
+            });
+        }
+
+        async function captureKebbiMicrophone(durationMs) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: false,
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1
+                }
+            });
+            try {
+                const mimeType = preferredAudioMimeType();
+                const recorder = mimeType
+                    ? new MediaRecorder(stream, { mimeType })
+                    : new MediaRecorder(stream);
+                const chunks = [];
+                const stopped = new Promise((resolve, reject) => {
+                    recorder.ondataavailable = event => {
+                        if (event.data && event.data.size > 0) chunks.push(event.data);
+                    };
+                    recorder.onstop = resolve;
+                    recorder.onerror = event => reject(
+                        event.error || new Error('凱比麥克風錄音失敗')
+                    );
+                });
+                recorder.start(250);
+                setBanner('🎤 聽到嗶聲後，請清楚說話', 'info');
+                await playListeningBeep();
+                await new Promise(resolve => setTimeout(resolve, durationMs));
+                if (recorder.state !== 'inactive') recorder.stop();
+                await stopped;
+                const blob = new Blob(chunks, {
+                    type: recorder.mimeType || mimeType || 'audio/webm'
+                });
+                if (blob.size < 1000) throw new Error('凱比麥克風沒有收到有效音訊');
+                return blob;
+            } finally {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        async function recognizeWithKebbiMicrophone(purpose) {
+            speechCaptureActive = true;
+            stopPromptPlayback();
+            const seconds = purpose === 'confirmation' ? 3.5 : 4.5;
+            setBanner(`🎤 正在使用凱比麥克風收音 ${seconds} 秒，請清楚說話`, 'info');
+            try {
+                const blob = await captureKebbiMicrophone(seconds * 1000);
+                const form = new FormData();
+                form.append('audio', blob, 'kebbi-speech');
+                const result = await requestJson(
+                    `/speech/transcribe-upload?purpose=${encodeURIComponent(purpose)}`,
+                    { method: 'POST', body: form }
+                );
+                if (!Array.isArray(result.transcripts) || result.transcripts.length === 0) {
+                    throw new Error('沒有辨識到清楚語音');
+                }
+                return result.transcripts;
+            } finally {
+                speechCaptureActive = false;
+            }
+        }
+
+        function isSpeechBusyError(error) {
+            return String(error?.message || error).includes('另一段語音正在辨識');
+        }
+
+        async function recognizeOnce(promptText, purpose = 'name') {
+            if (!isActiveAutomationTab) throw new Error('此分頁已停止控制自動檢測');
+            await speakAsync(promptText);
+            // speakAsync 只會在問句音檔播放完畢後返回；接著留出安靜間隔，
+            // 再由 captureKebbiMicrophone 啟動錄音器並播放短嗶聲。
+            await new Promise(resolve => setTimeout(resolve, POST_TTS_LISTEN_DELAY_MS));
+            if (PC_REHEARSAL_MODE) return recognizeWithServer(purpose);
+            if (supportsKebbiMicrophone()) {
+                try {
+                    return await recognizeWithKebbiMicrophone(purpose);
+                } catch (error) {
+                    if (isSpeechBusyError(error)) throw error;
+                    console.warn('凱比麥克風無法使用，改用 C922 麥克風：', error);
+                    document.getElementById('automationMessage').textContent =
+                        `凱比麥克風無法使用（${error.message}），已改用 C922 麥克風。`;
+                    return recognizeWithServer(purpose);
+                }
+            }
+            if (!SpeechRecognitionCtor) return recognizeWithServer(purpose);
+            return new Promise((resolve, reject) => {
+                const recognition = new SpeechRecognitionCtor();
+                recognition.lang = 'zh-TW';
+                recognition.interimResults = false;
+                recognition.continuous = false;
+                recognition.maxAlternatives = 5;
+                const timeout = setTimeout(() => {
+                    try { recognition.abort(); } catch (_) {}
+                    reject(new Error('等待語音逾時'));
+                }, 12000);
+                recognition.onresult = event => {
+                    clearTimeout(timeout);
+                    const alternatives = [];
+                    for (let i = 0; i < event.results[0].length; i++) {
+                        alternatives.push(event.results[0][i].transcript.trim());
+                    }
+                    resolve(alternatives.filter(Boolean));
+                };
+                recognition.onerror = event => {
+                    clearTimeout(timeout);
+                    reject(new Error(`語音辨識失敗：${event.error}`));
+                };
+                recognition.onnomatch = () => {
+                    clearTimeout(timeout);
+                    reject(new Error('沒有辨識到清楚語音'));
+                };
+                try { recognition.start(); }
+                catch (error) { clearTimeout(timeout); reject(error); }
+            });
+        }
+
+        async function findParticipant(transcripts) {
+            return requestJson('/participants/match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transcripts })
+            });
+        }
+
+        async function startQrIdentityFlow() {
+            if (!isActiveAutomationTab) return;
+            const token = ++identityFlowToken;
+            identityFlowRunning = true;
+            let fallbackShown = false;
+            const showManualFallback = (message) => {
+                if (fallbackShown || token !== identityFlowToken) return;
+                fallbackShown = true;
+                document.getElementById('manualNameFallback').style.display = 'flex';
+                document.getElementById('automationMessage').textContent = message;
+            };
+            const fallbackTimer = setTimeout(() => {
+                showManualFallback(
+                    '仍在掃描 QR Code；若卡片損壞，可由工作人員輸入名冊姓名備援。'
+                );
+            }, MANUAL_NAME_FALLBACK_DELAY_MS);
+            setBanner('▣ 請將受測者 QR Code 對準 C922', 'info');
+            // 每一輪都先自我介紹再請受測者出示 QR Code。QR 掃描不使用麥克風，
+            // 語音與掃描同時進行，不必等播完。
+            lastPersonSeenSec = performance.now() / 1000;
+            void queueSpeech(KEBBI_GREETING, { minimumMs: 300 });
+            void queueSpeech(QR_PROMPT, { minimumMs: 300 });
+            const noQrTimer = setTimeout(() => {
+                if (token !== identityFlowToken || automationServerState.state !== 'scanning_qr') return;
+                if (document.getElementById('manualNameInput').value.trim()) return;
+                void returnToAutoStandby('30 秒內沒有掃到 QR Code，回到待命');
+            }, AUTO_CANCEL_NO_QR_MS);
+            document.getElementById('automationMessage').textContent =
+                '正在由電腦端 C922 掃描 QR Code；QR 僅含受測者編號。';
+            try {
+                while (isActiveAutomationTab && token === identityFlowToken) {
+                    let result;
+                    try {
+                        result = await requestJson(
+                            '/automation/qr-scan', { method: 'POST' }, 2500
+                        );
+                    } catch (error) {
+                        if (token !== identityFlowToken || !isActiveAutomationTab) return;
+                        showManualFallback(
+                            `QR 掃描暫時無法使用（${error.message}），可輸入名冊姓名備援。`
+                        );
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
+                    }
+                    if (result.status === 'matched') {
+                        automationServerState = result.automation;
+                        updateAutomationPanel(result.automation);
+                        await confirmParticipant(result.participant, result.automation);
+                        return;
+                    }
+                    if (result.status === 'invalid') {
+                        document.getElementById('automationMessage').textContent = result.message;
+                        setBanner(`⚠️ ${result.message}`, 'warn');
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 400));
+                }
+            } catch (error) {
+                if (token !== identityFlowToken || !isActiveAutomationTab) return;
+                document.getElementById('manualNameFallback').style.display = 'flex';
+                document.getElementById('automationMessage').textContent =
+                    `QR 掃描暫時無法使用（${error.message}），可輸入名冊姓名備援。`;
+            } finally {
+                clearTimeout(fallbackTimer);
+                clearTimeout(noQrTimer);
+                if (token === identityFlowToken) identityFlowRunning = false;
+            }
+        }
+
+        async function submitManualName() {
+            const name = document.getElementById('manualNameInput').value.trim();
+            if (!name) return;
+            identityFlowToken++;
+            identityFlowRunning = true;
+            try {
+                const result = await findParticipant([name]);
+                if (result.match_count !== 1) throw new Error('名冊中找不到唯一對應姓名');
+                await confirmParticipant(result.candidates[0]);
+            } catch (error) {
+                identityFlowRunning = false;
+                document.getElementById('automationMessage').textContent = error.message;
+            }
+        }
+
+        function loadParticipantIntoForm(profile) {
+            document.getElementById('subjectId').value = profile.participant_id;
+            document.getElementById('age').value = profile.age;
+            document.getElementById('height').value = profile.height_cm;
+            document.getElementById('weight').value = profile.weight_kg;
+            document.getElementById('gender').value = profile.gender;
+            document.getElementById('manualNameFallback').style.display = 'none';
+        }
+
+        async function confirmParticipant(profile, existingState = null) {
+            loadParticipantIntoForm(profile);
+
+            const state = existingState || await requestJson('/automation/profile-loaded', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ participant_id: profile.participant_id })
+                });
+            automationServerState = state;
+            updateAutomationPanel(state);
+            setBanner(`✅ 已確認：${profile.name}`, 'ok');
+            await speakAsync(
+                '您好，基本資料已載入。接下來將依序進行三項動作測試。',
+                { minimumMs: 2500 }
+            );
+            setBanner('✅ 身分已確認，請退後並讓肩膀、髖部、膝蓋與腳踝完整入鏡', 'info');
+            await speakAsync('請完整入鏡');
+            identityFlowRunning = false;
+        }
+
+        async function reportAutomationFailure(message, changePanel = true) {
+            if (!isActiveAutomationTab) return;
+            const reportableStates = [
+                'armed', 'scanning_qr', 'profile_loaded', 'testing', 'completed'
+            ];
+            const expectedState = automationServerState.state;
+            const expectedRevision = automationServerState.revision;
+            if (!reportableStates.includes(expectedState)
+                || !Number.isInteger(expectedRevision)) return;
+            if (changePanel) document.getElementById('automationMessage').textContent = message;
+            try {
+                const state = await requestJson('/automation/failed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: String(message).slice(0, 200),
+                        expected_state: expectedState,
+                        expected_revision: expectedRevision,
+                        participant_id: automationServerState.participant?.participant_id ?? null
+                    })
+                });
+                automationServerState = state;
+                if (changePanel) updateAutomationPanel(state);
+            } catch (_) {}
+        }
+
+        async function beginAutomatedTests(profile) {
+            if (!isActiveAutomationTab) return;
+            if (automationSequenceActive) return;
+            automationSequenceActive = true;
+            automationActionIndex = -1;
+            automationRetryCounts = {};
+            const token = ++automationRunToken;
+            try {
+                const state = await requestJson('/automation/testing', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ participant_id: profile.participant_id })
+                });
+                automationServerState = state;
+                updateAutomationPanel(state);
+                await advanceAutomatedTest(null, token);
+            } catch (error) {
+                automationSequenceActive = false;
+                await reportAutomationFailure(`無法開始自動測試：${error.message}`);
+            }
+        }
+
+        function retryCurrentAutomatedAction(actionId, token = automationRunToken) {
+            if (AUTOMATED_ACTIONS[automationActionIndex]?.id !== actionId) return false;
+            const used = automationRetryCounts[actionId] || 0;
+            if (used >= MAX_AUTOMATED_ACTION_RETRIES) return false;
+            automationRetryCounts[actionId] = used + 1;
+            // advanceAutomatedTest 會先遞增索引，所以退回一格以重做同一項。
+            automationActionIndex--;
+            void (async () => {
+                setBanner(`${ACTION_LABEL[actionId]}：第 ${used + 1} 次重試`, 'warn');
+                await speakAsync(ACTION_RETRY_PROMPT, { minimumMs: 1500 });
+                await advanceAutomatedTest(null, token, { retry: true });
+            })().catch(error => {
+                automationSequenceActive = false;
+                void reportAutomationFailure(`自動測試無法繼續：${error.message}`);
+            });
+            return true;
+        }
+
+        async function advanceAutomatedTest(
+            finishedActionId, token = automationRunToken, { retry = false } = {}
+        ) {
+            if (!automationSequenceActive || token !== automationRunToken) return;
+            if (finishedActionId && AUTOMATED_ACTIONS[automationActionIndex]?.id !== finishedActionId) return;
+            if (finishedActionId) {
+                setBanner(`${ACTION_LABEL[finishedActionId]}：完成`, 'ok');
+                // 停止錄影時已播報完成語句（如「半蹲動作已記錄，錄影即將結束」），
+                // 這裡只等它播完，不再加播「結束」，避免受測者分不清哪一句才是真的結束。
+                await liveSpeechChain;
+                await new Promise(resolve => setTimeout(resolve, 800));
+                if (!automationSequenceActive || token !== automationRunToken) return;
+            }
+            automationActionIndex++;
+            updateFlowTimeline(automationServerState);
+
+            if (automationActionIndex >= AUTOMATED_ACTIONS.length) {
+                automationSequenceActive = false;
+                setBanner('✅ 三項錄影完成，開始上傳分析', 'ok');
+                await speakAsync('三項動作已完成，正在進行分析，請稍候。', { minimumMs: 1800 });
+                const participantId = automationServerState.participant?.participant_id;
+                try {
+                    const state = await requestJson('/automation/completed', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ participant_id: participantId })
+                    });
+                    automationServerState = state;
+                    updateAutomationPanel(state);
+                } catch (error) {
+                    setBanner(`⚠️ 無法進入分析階段：${error.message}`, 'warn');
+                    await reportAutomationFailure(`無法進入分析階段：${error.message}`);
+                    return;
+                }
+                await startUpload({ automated: true });
+                return;
+            }
+
+            const step = AUTOMATED_ACTIONS[automationActionIndex];
+            setBanner(`${retry ? '重做' : '下一項'}：${ACTION_LABEL[step.id]}`, 'info');
+            // 重試時不重播整段說明，只保留就緒提示與倒數。
+            if (!retry) {
+                await speakAsync(step.prompt, { minimumMs: 5000 });
+                if (!automationSequenceActive || token !== automationRunToken) return;
+            }
+            await speakAsync(step.readyPrompt, { minimumMs: 1800 });
+            if (!automationSequenceActive || token !== automationRunToken) return;
+            const ready = await waitForActionReadiness(step, token);
+            if (!ready || !automationSequenceActive || token !== automationRunToken) return;
+            await speakAsync('姿勢已就緒，準備倒數。', { minimumMs: 1200 });
+            for (let count = 3; count >= 1; count--) {
+                if (!automationSequenceActive || token !== automationRunToken) return;
+                setBanner(`${ACTION_LABEL[step.id]}：${count}`, 'info');
+                await speakAsync(String(count), { minimumMs: 1000, timeoutMs: 2200 });
+            }
+            if (!automationSequenceActive || token !== automationRunToken) return;
+            await speakAsync('開始', { minimumMs: 800, timeoutMs: 2200 });
+            await toggleRecording(step.id, BTN_ID_MAP[step.id], ACTION_LABEL[step.id]);
+            if (!isRecording) {
+                automationSequenceActive = false;
+                await reportAutomationFailure(`無法開始${ACTION_LABEL[step.id]}錄影`);
+            }
+        }
+
+        function toggleSpeech(button) {
             speechEnabled = !speechEnabled;
-            btn.classList.toggle('active', speechEnabled);
-            btn.textContent = speechEnabled ? '🔊 語音提示：開' : '🔇 語音提示：關';
-            if (!speechEnabled && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+            button.classList.toggle('active', speechEnabled);
+            button.textContent = speechEnabled ? '🔊 語音提示：開' : '🔇 語音提示：關';
+            if (!speechEnabled) stopPromptPlayback();
+        }
+
+        async function attemptKebbiAudioAutostart() {
+            const button = document.getElementById('audioUnlockButton');
+            const status = document.getElementById('audioUnlockStatus');
+            status.textContent = '正在自動啟用語音…';
+            const enabled = await enableKebbiAudio(button, true);
+            if (!enabled) document.getElementById('audioUnlockOverlay').hidden = false;
+        }
+
+        async function enableKebbiAudio(button, automatic = false) {
+            button.disabled = true;
+            const status = document.getElementById('audioUnlockStatus');
+            const speechButton = document.getElementById('speechToggleBtn');
+            speechEnabled = true;
+            speechButton.classList.add('active');
+            speechButton.textContent = '🔊 語音提示：開';
+            // 開啟頁面時只播短提示音解鎖語音；自我介紹改在每一輪開始時播放。
+            const confirmation = new Audio('/static/tts/chime.wav');
+            confirmation.preload = 'auto';
+            try {
+                await confirmation.play();
+                kebbiAudioReady = true;
+                status.textContent = '語音已啟用。';
+                document.getElementById('audioUnlockOverlay').hidden = true;
+                setBanner('✅ 凱比語音提示已啟用', 'ok');
+                return true;
+            } catch (error) {
+                status.textContent = automatic
+                    ? 'Firefox 阻擋了自動語音；請點一下作為備援解鎖。'
+                    : '語音仍被瀏覽器阻擋，請再點一次。';
+                console.warn('凱比語音解鎖失敗：', error);
+                button.disabled = false;
+                return false;
+            }
+        }
+
+        function queueSpeech(text, options = { minimumMs: 250 }) {
+            liveSpeechChain = liveSpeechChain.then(() => speakAsync(text, options));
+            return liveSpeechChain;
         }
 
         function speak(text) {
-            if (!speechEnabled || !('speechSynthesis' in window)) return;
+            if (speechCaptureActive || !speechEnabled || !('speechSynthesis' in window)) return;
             const now = Date.now();
-            if (live.lastSpokenAt[text] && now - live.lastSpokenAt[text] < 2500) return; // 避免同句話反覆播報
+            if (live.lastSpokenAt[text] && now - live.lastSpokenAt[text] < 2500) return;
             live.lastSpokenAt[text] = now;
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.lang = 'zh-TW';
-            utter.rate = 1.0;
-            window.speechSynthesis.speak(utter);
+            void queueSpeech(text);
         }
     </script>
 </body>

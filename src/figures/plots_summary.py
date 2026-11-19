@@ -22,7 +22,7 @@ def pipeline() -> None:
     ax.axis("off")
 
     stages = [
-        (2, "現場錄影", "治療師以手機拍攝\n三項動作\n720p / 30fps", COLOR_NEUTRAL),
+        (2, "凱比取像", "內建鏡頭即時追蹤\n五次坐站並計次\n達 5 次自動停錄", COLOR_NEUTRAL),
         (18, "骨架擷取", "MediaPipe Pose\n每幀 33 個關節點\n（含可見度分數）", ACTION_COLORS["Sit"]),
         (34, "前處理", "座標軸統一\n身材尺度正規化\n取身體 22 點", ACTION_COLORS["Walk"]),
         (50, "深度模型", "ST-GCN\n抽取時空特徵\n（每動作 16 維）", ACTION_COLORS["Squat"]),
@@ -47,6 +47,7 @@ def pipeline() -> None:
 
     # 下方補充：關鍵設計決定
     notes = [
+        (2, "行走與半蹲依取景需求\n使用外接鏡頭"),
         (18, "使用 world landmarks\n不受拍攝距離影響"),
         (34, "解決不同場地的\n鏡頭方向不一致"),
         (50, "先以合成資料預訓練\n再用真實個案微調"),
@@ -59,7 +60,7 @@ def pipeline() -> None:
 
     ax.text(50, 34.5, "整體流程", ha="center", fontsize=15, fontweight="bold")
     ax.text(50, 31.2,
-            "從一支手機影片，到一份可解釋的肌少症風險報告",
+            "從凱比引導與動作取像，到一份可解釋的肌少症風險報告",
             ha="center", fontsize=10, color=COLOR_NEUTRAL)
 
     save(fig, "18_系統流程", "六個階段總覽")

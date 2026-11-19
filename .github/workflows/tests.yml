@@ -23,12 +23,12 @@ jobs:
       - name: Run tests
         run: pytest tests/ -q
 
-  recording:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Test recording guidance and lifecycle
-        run: node --test tests/recording.test.cjs
+      - name: Test action readiness and sit-to-stand counting
+        run: node --test tests/action_readiness.test.js tests/sit_to_stand_counter.test.js tests/inline_scripts.test.js

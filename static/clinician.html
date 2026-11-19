@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>專業判讀後台｜身體功能篩檢</title>
+    <style>
+        :root { --ink:#26343d; --muted:#667784; --line:#d8e0e4; --accent:#315f72; --warn:#a45a28; --bg:#f3f5f3; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:"Microsoft JhengHei",sans-serif; color:var(--ink); background:var(--bg); }
+        main { max-width:1180px; margin:auto; padding:38px 24px 70px; }
+        header { display:flex; justify-content:space-between; align-items:end; gap:24px; border-bottom:1px solid var(--line); padding-bottom:22px; }
+        h1 { margin:0; font-size:34px; } .sub { color:var(--muted); margin-top:8px; }
+        .login { display:flex; gap:8px; } input,select,textarea,button { font:inherit; }
+        input,select,textarea { border:1px solid #b9c5cb; background:white; padding:11px 12px; border-radius:4px; }
+        button { border:0; background:var(--accent); color:white; padding:11px 17px; border-radius:4px; cursor:pointer; font-weight:700; }
+        button:disabled { opacity:.5; cursor:not-allowed; }
+        .notice { margin:24px 0; padding:15px 18px; border-left:4px solid var(--warn); background:#fffaf4; line-height:1.6; }
+        #status { min-height:24px; color:var(--muted); margin:14px 0; }
+        table { width:100%; border-collapse:collapse; background:white; }
+        th,td { padding:13px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+        th { background:#e9eeef; font-size:14px; }
+        .review { display:grid; grid-template-columns:180px minmax(220px,1fr) auto; gap:8px; }
+        .empty { padding:38px; text-align:center; color:var(--muted); background:white; }
+        @media(max-width:850px){ header{align-items:start;flex-direction:column}.review{grid-template-columns:1fr}table{font-size:14px}.login{width:100%}.login input{min-width:0;flex:1} }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <div><h1>專業判讀後台</h1><div class="sub">僅供授權的治療師或研究團隊使用</div></div>
+        <div class="login"><input id="token" type="password" autocomplete="off" placeholder="輸入本機判讀權杖"><button id="loadBtn">載入收案紀錄</button></div>
+    </header>
+    <div class="notice">此處記錄的是<strong>專業判讀與轉介建議</strong>，不是由模型自動下診斷。確定肌少症仍須結合肌肉量、肌力、身體功能與臨床評估。</div>
+    <div id="status">尚未載入資料。</div>
+    <div id="content" class="empty">輸入權杖後，才會從正式收案資料載入去識別化編號與動作完成情形。</div>
+</main>
+<script>
+    const tokenInput = document.getElementById('token');
+    const statusBox = document.getElementById('status');
+    const content = document.getElementById('content');
+    tokenInput.value = sessionStorage.getItem('clinician-token') || '';
+
+    async function api(path, options = {}) {
+        const token = tokenInput.value.trim();
+        if (!token) throw new Error('請輸入判讀權杖');
+        const response = await fetch(path, {
+            ...options,
+            headers: { ...(options.headers || {}), 'X-Clinician-Token': token },
+        });
+        if (!response.ok) {
+            let detail = `HTTP ${response.status}`;
+            try { detail = (await response.json()).detail || detail; } catch (_) {}
+            throw new Error(detail);
+        }
+        sessionStorage.setItem('clinician-token', token);
+        return response.json();
+    }
+
+    function assessmentLabel(code) {
+        return ({ insufficient:'資料不足', screen_negative:'功能篩檢無明顯異常', possible_sarcopenia:'可能肌少症', refer_for_confirmation:'建議轉介確認' })[code] || '尚未判讀';
+    }
+
+    function render(records) {
+        content.className = '';
+        content.replaceChildren();
+        if (!records.length) {
+            content.className = 'empty';
+            content.textContent = '目前沒有正式收案紀錄。';
+            return;
+        }
+        const table = document.createElement('table');
+        const head = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['受測者編號','已完成動作','目前判讀','專業判讀與備註'].forEach(text => {
+            const th = document.createElement('th'); th.textContent = text; headerRow.appendChild(th);
+        });
+        head.appendChild(headerRow); table.appendChild(head);
+        const body = document.createElement('tbody');
+        records.forEach(record => {
+            const row = document.createElement('tr');
+            const idCell = document.createElement('td'); idCell.textContent = record.participant_id;
+            const actionCell = document.createElement('td'); actionCell.textContent = record.completed_actions.join('、') || '無';
+            const currentCell = document.createElement('td'); currentCell.textContent = assessmentLabel(record.professional_review);
+            const reviewCell = document.createElement('td');
+            const form = document.createElement('div'); form.className = 'review';
+            const select = document.createElement('select');
+            [['insufficient','資料不足'],['screen_negative','功能篩檢無明顯異常'],['possible_sarcopenia','可能肌少症'],['refer_for_confirmation','建議轉介確認']].forEach(([value,label]) => {
+                const option = document.createElement('option'); option.value=value; option.textContent=label;
+                option.selected = record.professional_review === value; select.appendChild(option);
+            });
+            const note = document.createElement('input'); note.placeholder='備註（不輸入姓名）'; note.maxLength=500; note.value=record.review_note || '';
+            const save = document.createElement('button'); save.textContent='儲存判讀';
+            save.addEventListener('click', async () => {
+                save.disabled = true; statusBox.textContent = `正在儲存 ${record.participant_id}…`;
+                try {
+                    await api('/clinician/review', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ participant_id:record.participant_id, assessment:select.value, note:note.value }) });
+                    currentCell.textContent = assessmentLabel(select.value);
+                    statusBox.textContent = `${record.participant_id} 的專業判讀已儲存。`;
+                } catch (error) { statusBox.textContent = `儲存失敗：${error.message}`; }
+                finally { save.disabled = false; }
+            });
+            form.append(select,note,save); reviewCell.appendChild(form);
+            row.append(idCell,actionCell,currentCell,reviewCell); body.appendChild(row);
+        });
+        table.appendChild(body); content.appendChild(table);
+    }
+
+    async function loadRecords() {
+        statusBox.textContent = '正在載入正式收案紀錄…';
+        try { const data = await api('/clinician/records'); render(data.records); statusBox.textContent = `已載入 ${data.records.length} 位受測者。`; }
+        catch (error) { content.className='empty'; content.textContent='無法顯示資料。'; statusBox.textContent=`載入失敗：${error.message}`; }
+    }
+    document.getElementById('loadBtn').addEventListener('click', loadRecords);
+</script>
+</body>
+</html>

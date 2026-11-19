@@ -61,6 +61,12 @@ VISIBILITY_THRESHOLD = 0.5
 # 低於此比例的可見關節時，該動作的結果標記為低可信度
 LOW_CONFIDENCE_VISIBILITY = 0.80
 
+# 平均可見度會被清楚的時段稀釋，因此另外檢查「下半身看不到」的影格比例。
+# 訓練資料中被遮擋幀比例最高為行走的 7.7%（見 results/data_health_report.md）。
+LOWER_BODY_LANDMARKS = (23, 24, 25, 26, 27, 28)
+OCCLUDED_FRAME_VISIBILITY = 0.5
+MAX_OCCLUDED_FRAME_RATIO = 0.20
+
 # 少於此影格數視為拍攝失敗。訓練資料中最短的樣本為 93 幀（約 3.1 秒），
 # 低於 30 幀（1 秒）不足以涵蓋任何一個完整動作週期。
 MIN_USABLE_FRAMES = 30
@@ -72,6 +78,9 @@ UNCERTAIN_HIGH = 0.70
 
 # 低於此年齡超出訓練族群（69–88 歲），與 _validate_profile 的警告一致
 MIN_SUPPORTED_AGE = 65
+
+# AWGS 2019 的篩檢對象為 60 歲以上長者；未滿此年齡不提供風險判斷
+AWGS_MIN_AGE = 60
 
 # 少於此數量的動作時，單一影片的雜訊無法被其他動作平衡
 MIN_ACTIONS_FOR_CONFIDENT_RESULT = 2
@@ -87,6 +96,7 @@ class ActionResult:
     weight: float = 0.0
     frames: int = 0
     visibility_mean: float = 0.0
+    occluded_ratio: float = 0.0
     low_confidence: bool = False
     reason: str = "ok"
 
@@ -106,6 +116,8 @@ class PredictionResult:
     # 為 True 時前端不應呈現明確的風險分級，而是建議由治療師評估
     uncertain: bool = False
     uncertainty_reasons: List[str] = field(default_factory=list)
+    # 為 True 時受測者未達 AWGS 2019 適用年齡，risk_probability 為 None
+    age_not_applicable: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -185,13 +197,29 @@ def _missing_actions_message(used: Sequence[str], known: Sequence[str]) -> str:
 
 def _low_visibility_message(low_quality: Sequence[str]) -> str:
     return (
-        f"下列動作的關節可見度偏低，座標多為系統推測值，結果可信度較低："
-        f"{', '.join(low_quality)}"
+        f"下列動作的關節可見度偏低或有一段時間下半身不在畫面內，"
+        f"座標多為系統推測值，結果可信度較低：{', '.join(low_quality)}"
     )
 
 
 def _young_age_message(age: float) -> str:
     return f"年齡 {age:.0f} 低於模型訓練族群（69–88 歲），評估結果外推性有限"
+
+
+def _below_awgs_age_message(age: float) -> str:
+    return (
+        f"年齡 {age:.0f} 歲未達 AWGS 2019 適用年齡（{AWGS_MIN_AGE} 歲以上），"
+        f"本次不提供風險判斷"
+    )
+
+
+def _age_message(age: float) -> str | None:
+    """年齡相關提示只回傳一則，避免同一原因重複出現。"""
+    if age < AWGS_MIN_AGE:
+        return _below_awgs_age_message(age)
+    if age < MIN_SUPPORTED_AGE:
+        return _young_age_message(age)
+    return None
 
 
 def _uncertainty_reasons(
@@ -216,9 +244,9 @@ def _uncertainty_reasons(
         reasons.append(_low_visibility_message(low_quality))
     if len(used) < MIN_ACTIONS_FOR_CONFIDENT_RESULT:
         reasons.append(_missing_actions_message(used, known))
-    age = float(profile["age"])
-    if age < MIN_SUPPORTED_AGE:
-        reasons.append(_young_age_message(age))
+    age_message = _age_message(float(profile["age"]))
+    if age_message:
+        reasons.append(age_message)
     return reasons
 
 
@@ -262,7 +290,8 @@ def _validate_profile(profile: Mapping[str, Any]) -> List[str]:
     height = float(profile["height_cm"])
     weight = float(profile["weight_kg"])
 
-    if not 40 <= age <= 110:
+    # 偏低的年齡由下方的 AWGS／訓練族群提示處理，這裡只檢查明顯的輸入錯誤
+    if age > 110:
         warnings.append(f"年齡 {age:.0f} 超出常見範圍（40–110），請確認輸入是否正確")
     if not 120 <= height <= 200:
         warnings.append(f"身高 {height:.0f} cm 超出常見範圍（120–200）")
@@ -270,8 +299,9 @@ def _validate_profile(profile: Mapping[str, Any]) -> List[str]:
         warnings.append(f"體重 {weight:.1f} kg 超出常見範圍（25–150）")
 
     # 模型的訓練族群為 69–88 歲長者，超出此範圍的推論外推性有限
-    if age < MIN_SUPPORTED_AGE:
-        warnings.append(_young_age_message(age))
+    age_message = _age_message(age)
+    if age_message:
+        warnings.append(age_message)
     return warnings
 
 
@@ -312,6 +342,8 @@ def _infer_action(
         ), None
 
     visibility = float(raw[..., 3].mean())
+    lower_body_visibility = raw[:, LOWER_BODY_LANDMARKS, 3].mean(axis=1)
+    occluded_ratio = float((lower_body_visibility < OCCLUDED_FRAME_VISIBILITY).mean())
     normalized = normalize_sequence(raw)
     resampled = resample_time(normalized, metadata["target_frames"][action])
     tensor = to_model_tensor(resampled)
@@ -331,7 +363,11 @@ def _infer_action(
             weight=weight,
             frames=int(raw.shape[0]),
             visibility_mean=round(visibility, 4),
-            low_confidence=visibility < LOW_CONFIDENCE_VISIBILITY,
+            occluded_ratio=round(occluded_ratio, 4),
+            low_confidence=(
+                visibility < LOW_CONFIDENCE_VISIBILITY
+                or occluded_ratio > MAX_OCCLUDED_FRAME_RATIO
+            ),
         ),
         importance["node_importance"][0].numpy(),
     )
@@ -427,6 +463,22 @@ def predict(
         _region_attention(np.sum(attention_stack, axis=0) / weight_sum, BODY_NODES)
         if attention_stack else {}
     )
+
+    if float(profile["age"]) < AWGS_MIN_AGE:
+        # 仍保留各動作結果供工作人員檢查錄影品質，但不輸出整體風險
+        return PredictionResult(
+            ok=True,
+            risk_probability=None,
+            risk_level="不適用",
+            used_actions=used,
+            per_action={a: asdict(r) for a, r in per_action.items()},
+            region_attention=region_attention,
+            warnings=warnings,
+            message="未達 AWGS 2019 適用年齡，不提供風險判斷",
+            uncertain=True,
+            uncertainty_reasons=uncertainty_reasons,
+            age_not_applicable=True,
+        )
 
     return PredictionResult(
         ok=True,

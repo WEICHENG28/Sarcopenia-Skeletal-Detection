@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>肌少症自動檢測控制台</title>
+    <style>
+        :root { color-scheme: light; font-family: "Microsoft JhengHei", system-ui, sans-serif; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        main { width: min(760px, calc(100% - 32px)); margin: 48px auto; }
+        .card { background: #fff; border: 1px solid #d1d5db; border-radius: 20px; padding: 32px; box-shadow: 0 12px 28px rgba(0,0,0,.08); }
+        h1 { margin: 0 0 8px; font-size: 32px; }
+        .note { color: #4b5563; line-height: 1.7; }
+        .status { margin: 26px 0; border: 2px solid #111827; border-radius: 16px; padding: 22px; }
+        .status-label { font-size: 14px; font-weight: 700; color: #6b7280; }
+        #stateText { font-size: 30px; font-weight: 800; margin: 8px 0; }
+        #message { font-size: 19px; min-height: 28px; }
+        .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+        .meta div { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 10px; }
+        .actions { display: grid; grid-template-columns: 2fr 1.35fr 1fr; gap: 14px; }
+        button { border: 0; border-radius: 14px; padding: 18px; font-size: 22px; font-weight: 800; cursor: pointer; }
+        #startBtn { background: #111827; color: #fff; }
+        #testSpeechBtn { background: #1d4ed8; color: #fff; font-size: 18px; }
+        #stopBtn { background: #dc2626; color: #fff; }
+        button:disabled { opacity: .45; cursor: not-allowed; }
+        .auto-mode { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 14px 18px; border: 1px solid #d1d5db; border-radius: 14px; }
+        .auto-mode-note { margin-top: 4px; color: #4b5563; font-size: 14px; line-height: 1.6; }
+        #autoModeBtn { flex: none; background: #fff; border: 2px solid #1d4ed8; color: #1d4ed8; font-size: 17px; }
+        #autoModeBtn.on { background: #1d4ed8; color: #fff; }
+        .error { color: #b91c1c; font-weight: 700; margin-top: 16px; min-height: 24px; }
+        #speechResult { color: #1e3a8a; font-weight: 700; margin-top: 16px; min-height: 24px; }
+        .rehearsal-link { display: block; margin-top: 16px; padding: 14px; border: 2px solid #1d4ed8; border-radius: 14px; text-align: center; font-size: 18px; font-weight: 800; text-decoration: none; background: #eff6ff; }
+        .rehearsal-link.mock { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
+        a { color: #1d4ed8; }
+        @media (max-width: 600px) { .actions, .meta { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<main>
+    <section class="card">
+        <h1>肌少症自動檢測控制台</h1>
+        <p class="note">先確認凱比已開啟正式檢測頁並啟用語音，再按「開啟自動偵測」讓凱比自動迎接受測者，或按「啟動一輪檢測」手動開始。開始後凱比會先自我介紹並開始掃描受測者編號 QR Code，凱比會說「請給我看您的 QR Code」；身分確認後再退到全身完整入鏡的位置，系統才會開始動作測試。</p>
+        <div class="status">
+            <div class="status-label">目前狀態</div>
+            <div id="stateText">讀取中…</div>
+            <div id="message"></div>
+            <div class="meta">
+                <div>名冊：<strong id="rosterText">檢查中…</strong></div>
+                <div>受測者：<strong id="participantText">尚未確認</strong></div>
+                <div>姓名備援語音：<strong id="speechText">檢查中…</strong></div>
+                <div>展場預檢：<strong id="preflightText">檢查中…</strong></div>
+            </div>
+        </div>
+        <div class="auto-mode">
+            <div>
+                <strong>自動偵測</strong>：<span id="autoModeText">關閉</span>
+                <div class="auto-mode-note">開啟後，有人走到鏡頭前站定約 3 秒就自動開始；30 秒沒掃到 QR Code 或人離開 10 秒，會自動回到待命。誤入時按「立即停止」即可。</div>
+            </div>
+            <button id="autoModeBtn" onclick="toggleAutoMode()">開啟自動偵測</button>
+        </div>
+        <div class="actions">
+            <button id="startBtn" onclick="startAutomation()">啟動一輪檢測</button>
+            <button id="testSpeechBtn" onclick="testSpeech()">測試姓名備援</button>
+            <button id="stopBtn" onclick="stopAutomation()">立即停止</button>
+        </div>
+        <div id="speechResult"></div>
+        <div class="error" id="errorText"></div>
+        <a class="rehearsal-link" href="/?rehearsal=1" target="_blank" rel="noopener">沒有凱比：開啟電腦彩排畫面</a>
+        <a class="rehearsal-link mock" href="/?rehearsal=1&amp;mock=1" target="_blank" rel="noopener">沒有凱比也沒有Webcam：開啟流程模擬</a>
+        <p class="note">正式身分確認以 <code>outputs/automation-qr/</code> 的受測者編號 QR Code 為主。名冊請在 <code>outputs/automation-roster/受測者名冊.xlsx</code> 編輯；QR 損壞時才使用姓名備援。</p>
+    </section>
+</main>
+<script>
+    const STATE_LABELS = {
+        idle: '待機', armed: '自動偵測待命', scanning_qr: '掃描 QR Code',
+        identifying: '舊版姓名辨識中',
+        profile_loaded: '等待完整入鏡', testing: '動作測試中',
+        completed: '本輪完成', error: '需要協助'
+    };
+    let speechTestRunning = false;
+    let preflightReady = false;
+    let autoMode = false;
+
+    async function api(path, options = {}) {
+        const response = await fetch(path, options);
+        if (!response.ok) {
+            let detail = `HTTP ${response.status}`;
+            try { detail = (await response.json()).detail || detail; } catch (_) {}
+            throw new Error(detail);
+        }
+        return response.json();
+    }
+
+    async function refresh() {
+        try {
+            const [state, roster, speech, preflight] = await Promise.all([
+                api('/automation/state'), api('/participants/status'), api('/speech/status'),
+                api('/exhibition/preflight')
+            ]);
+            document.getElementById('stateText').textContent = STATE_LABELS[state.state] || state.state;
+            document.getElementById('message').textContent = state.message || '';
+            document.getElementById('rosterText').textContent = roster.ready
+                ? `可使用（${roster.count} 人）` : `無法使用：${roster.message}`;
+            document.getElementById('participantText').textContent = state.participant
+                ? `${state.participant.name}（${state.participant.participant_id}）` : '尚未確認';
+            document.getElementById('speechText').textContent = speech.available
+                ? `可使用（${speech.model}${speech.model_loaded ? '／已載入' : '／待載入'}）`
+                : speech.message;
+            preflightReady = preflight.ready;
+            const warningText = preflight.warnings.length
+                ? `；警告：${preflight.warnings.join('、')}` : '';
+            document.getElementById('preflightText').textContent = preflight.ready
+                ? `必要項目通過${warningText}`
+                : `未通過：${preflight.blockers.join('、')}`;
+            autoMode = Boolean(state.auto_mode);
+            document.getElementById('autoModeText').textContent = autoMode ? '開啟' : '關閉';
+            const autoBtn = document.getElementById('autoModeBtn');
+            autoBtn.textContent = autoMode ? '關閉自動偵測' : '開啟自動偵測';
+            autoBtn.classList.toggle('on', autoMode);
+            autoBtn.disabled = !autoMode && (!roster.ready || !preflight.ready);
+            // 待命中仍允許手動開始，自動偵測不順時可直接接手。
+            const busy = ['scanning_qr','identifying','profile_loaded','testing'].includes(state.state);
+            document.getElementById('startBtn').disabled = !roster.ready || !preflight.ready || busy;
+            document.getElementById('testSpeechBtn').disabled = !speech.available || busy || speechTestRunning;
+        } catch (error) {
+            document.getElementById('errorText').textContent = error.message;
+        }
+    }
+
+    async function startAutomation() {
+        if (!preflightReady) {
+            document.getElementById('errorText').textContent = '展場預檢尚未通過，請先處理紅色提示。';
+            return;
+        }
+        document.getElementById('startBtn').disabled = true;
+        try { await api('/automation/start', { method: 'POST' }); }
+        catch (error) { document.getElementById('errorText').textContent = error.message; }
+        await refresh();
+    }
+
+    async function toggleAutoMode() {
+        try { await api(autoMode ? '/automation/disarm' : '/automation/arm', { method: 'POST' }); }
+        catch (error) { document.getElementById('errorText').textContent = error.message; }
+        await refresh();
+    }
+
+    async function stopAutomation() {
+        try { await api('/automation/stop', { method: 'POST' }); }
+        catch (error) { document.getElementById('errorText').textContent = error.message; }
+        await refresh();
+    }
+
+    async function testSpeech() {
+        speechTestRunning = true;
+        let failureMessage = '';
+        document.getElementById('testSpeechBtn').disabled = true;
+        document.getElementById('speechResult').textContent = '🎤 正在收音 4.5 秒，請現在清楚說出姓名…';
+        document.getElementById('errorText').textContent = '';
+        try {
+            const recognized = await api('/speech/listen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ purpose: 'name', duration_seconds: 4.5 })
+            });
+            const matched = await api('/participants/match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transcripts: recognized.transcripts })
+            });
+            const heard = recognized.transcripts.join('／');
+            const matchText = matched.match_count === 1
+                ? `符合 ${matched.candidates[0].name}（${matched.candidates[0].participant_id}）`
+                : matched.match_count > 1 ? '符合多人，需說完整姓名' : '未對上名冊';
+            document.getElementById('speechResult').textContent = `辨識結果：${heard}；${matchText}`;
+        } catch (error) {
+            document.getElementById('speechResult').textContent = '';
+            failureMessage = `語音測試失敗：${error.message}`;
+        } finally {
+            speechTestRunning = false;
+            await refresh();
+            if (failureMessage) document.getElementById('errorText').textContent = failureMessage;
+        }
+    }
+
+    refresh();
+    setInterval(refresh, 1000);
+</script>
+</body>
+</html>
